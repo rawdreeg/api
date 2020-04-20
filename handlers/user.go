@@ -30,7 +30,7 @@ type createUserPayload struct {
 
 // CreateUser is an endpoint that creates a user with password based
 // authentication.
-func CreateUser(w http.ResponseWriter, r *http.Request) {
+func (c *Config) CreateUser(w http.ResponseWriter, r *http.Request) {
 	op := errors.Op("handlers.CreateUser")
 	ctx := r.Context()
 	body := bjson.BodyFromContext(ctx)
@@ -42,7 +42,7 @@ func CreateUser(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Make sure the user is not already registered
-	foundUser, found, err := models.GetUserByEmail(ctx, payload.Email)
+	foundUser, found, err := c.ModelsClient.GetUserByEmail(ctx, payload.Email)
 	if err != nil {
 		bjson.HandleError(w, err)
 		return
@@ -75,7 +75,7 @@ func CreateUser(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Create the user object
-	user, err := models.NewUserWithPassword(
+	user, err := c.ModelsClient.NewUserWithPassword(
 		payload.Email,
 		payload.FirstName,
 		payload.LastName,
@@ -100,7 +100,7 @@ func CreateUser(w http.ResponseWriter, r *http.Request) {
 // GetCurrentUser Endpoint: GET /users
 
 // GetCurrentUser is an endpoint that returns the current user.
-func GetCurrentUser(w http.ResponseWriter, r *http.Request) {
+func (c *Config) GetCurrentUser(w http.ResponseWriter, r *http.Request) {
 	u := middleware.UserFromContext(r.Context())
 	bjson.WriteJSON(w, u, http.StatusOK)
 }
@@ -108,12 +108,12 @@ func GetCurrentUser(w http.ResponseWriter, r *http.Request) {
 // GetUser Endpoint: GET /users/{id}
 
 // GetUser is an endpoint that returns the requested user if found
-func GetUser(w http.ResponseWriter, r *http.Request) {
+func (c *Config) GetUser(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	vars := mux.Vars(r)
 	userID := vars["userID"]
 
-	u, err := models.GetUserByID(ctx, userID)
+	u, err := c.ModelsClient.GetUserByID(ctx, userID)
 	if err != nil {
 		bjson.HandleError(w, errors.E(errors.Op("handlers.GetUser"), err, http.StatusNotFound))
 		return
@@ -131,7 +131,7 @@ type authenticateUserPayload struct {
 }
 
 // AuthenticateUser is an endpoint that authenticates a user with a password.
-func AuthenticateUser(w http.ResponseWriter, r *http.Request) {
+func (c *Config) AuthenticateUser(w http.ResponseWriter, r *http.Request) {
 	op := errors.Op("handlers.AuthenticateUser")
 	ctx := r.Context()
 	body := bjson.BodyFromContext(ctx)
@@ -142,7 +142,7 @@ func AuthenticateUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	u, found, err := models.GetUserByEmail(ctx, payload.Email)
+	u, found, err := c.ModelsClient.GetUserByEmail(ctx, payload.Email)
 	if err != nil {
 		bjson.HandleError(w, err)
 		return
@@ -186,7 +186,7 @@ func AuthenticateUser(w http.ResponseWriter, r *http.Request) {
 //   4. merge an oauth based account with an unregestered account
 //      that was created as a result of an email-based invitation
 //
-func OAuth(w http.ResponseWriter, r *http.Request) {
+func (c *Config) OAuth(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	body := bjson.BodyFromContext(ctx)
 
@@ -212,7 +212,7 @@ func OAuth(w http.ResponseWriter, r *http.Request) {
 	var tokenUser *models.User
 	var canMergeTokenUser bool = false
 	if includesToken {
-		_tokenUser, ok, err := models.GetUserByToken(ctx, token)
+		_tokenUser, ok, err := c.ModelsClient.GetUserByToken(ctx, token)
 
 		if ok && err == nil {
 			canMergeTokenUser = !_tokenUser.Key.Incomplete() && !_tokenUser.IsRegistered()
@@ -221,7 +221,7 @@ func OAuth(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Get the user and return if found
-	u, found, err := models.GetUserByOAuthID(ctx, oauthPayload.ID, oauthPayload.Provider)
+	u, found, err := c.ModelsClient.GetUserByOAuthID(ctx, oauthPayload.ID, oauthPayload.Provider)
 	if err != nil {
 		bjson.HandleError(w, err)
 		return
@@ -240,7 +240,7 @@ func OAuth(w http.ResponseWriter, r *http.Request) {
 
 	// This user hasn't used Oauth before. Try to find the user by email.
 	// If found, associate the new token with the existing user.
-	u, found, err = models.GetUserByEmail(ctx, oauthPayload.Email)
+	u, found, err = c.ModelsClient.GetUserByEmail(ctx, oauthPayload.Email)
 	if err != nil {
 		bjson.HandleError(w, err)
 		return
@@ -300,7 +300,7 @@ func OAuth(w http.ResponseWriter, r *http.Request) {
 		log.Alarm(err)
 	}
 
-	u, err = models.NewUserWithOAuth(
+	u, err = c.ModelsClient.NewUserWithOAuth(
 		oauthPayload.Email,
 		oauthPayload.FirstName,
 		oauthPayload.LastName,
@@ -335,7 +335,7 @@ type updateUserPayload struct {
 //   - update FirstName and LastName fields on a user
 //   - initiate a password update which requires email based validation
 //
-func UpdateUser(w http.ResponseWriter, r *http.Request) {
+func (c *Config) UpdateUser(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	u := middleware.UserFromContext(ctx)
 	body := bjson.BodyFromContext(ctx)
@@ -378,7 +378,7 @@ type updatePasswordPayload struct {
 }
 
 // UpdatePassword updates a user's password.
-func UpdatePassword(w http.ResponseWriter, r *http.Request) {
+func (c *Config) UpdatePassword(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	body := bjson.BodyFromContext(ctx)
 
@@ -388,7 +388,7 @@ func UpdatePassword(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	u, err := models.GetUserByID(ctx, payload.UserID)
+	u, err := c.ModelsClient.GetUserByID(ctx, payload.UserID)
 	if err != nil {
 		bjson.HandleError(w, errors.E(
 			errors.Op("handlers.UpdatePassword"),
@@ -437,7 +437,7 @@ type verifyEmailPayload struct {
 
 // VerifyEmail verifies that the user's email is really hers. It is secured
 // with a signature.
-func VerifyEmail(w http.ResponseWriter, r *http.Request) {
+func (c *Config) VerifyEmail(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	body := bjson.BodyFromContext(ctx)
 
@@ -447,7 +447,7 @@ func VerifyEmail(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	u, err := models.GetUserByID(ctx, payload.UserID)
+	u, err := c.ModelsClient.GetUserByID(ctx, payload.UserID)
 	if err != nil {
 		bjson.HandleError(w, errors.E(
 			errors.Op("handlers.VerifyEmail"),
@@ -475,7 +475,7 @@ func VerifyEmail(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// If there is already an account associated with this email, merge the two accounts.
-	dupUser, found, err := models.GetUserByEmail(ctx, femail)
+	dupUser, found, err := c.ModelsClient.GetUserByEmail(ctx, femail)
 	if found {
 		err := u.MergeWith(ctx, &dupUser)
 		if err != nil {
@@ -509,7 +509,7 @@ type forgotPasswordPayload struct {
 // ForgotPassword sends a set password email to the user whose email
 // matches the email given in the payload. If no matching user is found
 // this does nothing.
-func ForgotPassword(w http.ResponseWriter, r *http.Request) {
+func (c *Config) ForgotPassword(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	body := bjson.BodyFromContext(ctx)
 
@@ -519,7 +519,7 @@ func ForgotPassword(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	u, found, err := models.GetUserByEmail(ctx, payload.Email)
+	u, found, err := c.ModelsClient.GetUserByEmail(ctx, payload.Email)
 	if err != nil {
 		bjson.HandleError(w, err)
 		return
@@ -535,7 +535,7 @@ func ForgotPassword(w http.ResponseWriter, r *http.Request) {
 // SendVerifyEmail Endpoint: POST /users/resend
 
 // SendVerifyEmail resends the email verification email.
-func SendVerifyEmail(w http.ResponseWriter, r *http.Request) {
+func (c *Config) SendVerifyEmail(w http.ResponseWriter, r *http.Request) {
 	u := middleware.UserFromContext(r.Context())
 	err := u.SendVerifyEmail(u.Email)
 	if err != nil {
@@ -554,7 +554,7 @@ type addEmailPayload struct {
 
 // AddEmail sends a verification email to the given email with a magic link that,
 // when clicked, adds the new email to the user's account.
-func AddEmail(w http.ResponseWriter, r *http.Request) {
+func (c *Config) AddEmail(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	u := middleware.UserFromContext(ctx)
 	body := bjson.BodyFromContext(ctx)
@@ -565,7 +565,7 @@ func AddEmail(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	foundUser, found, err := models.GetUserByEmail(ctx, payload.Email)
+	foundUser, found, err := c.ModelsClient.GetUserByEmail(ctx, payload.Email)
 	if err != nil {
 		bjson.HandleError(w, err)
 		return
@@ -597,7 +597,7 @@ type removeEmailPayload struct {
 }
 
 // RemoveEmail removes the given email from the user's account.
-func RemoveEmail(w http.ResponseWriter, r *http.Request) {
+func (c *Config) RemoveEmail(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	u := middleware.UserFromContext(ctx)
 	body := bjson.BodyFromContext(ctx)
@@ -629,7 +629,7 @@ type makePrimaryEmailPayload struct {
 }
 
 // MakeEmailPrimary removes the given email from the user's account.
-func MakeEmailPrimary(w http.ResponseWriter, r *http.Request) {
+func (c *Config) MakeEmailPrimary(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	u := middleware.UserFromContext(ctx)
 	body := bjson.BodyFromContext(ctx)
@@ -656,7 +656,7 @@ func MakeEmailPrimary(w http.ResponseWriter, r *http.Request) {
 // UserSearch Endpoint: GET /users/search?query={query}
 
 // UserSearch returns search results
-func UserSearch(w http.ResponseWriter, r *http.Request) {
+func (c *Config) UserSearch(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
 	query := r.URL.Query().Get("query")
@@ -665,7 +665,7 @@ func UserSearch(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	contacts, err := models.UserSearch(ctx, query)
+	contacts, err := c.ModelsClient.UserSearch(ctx, query)
 	if err != nil {
 		bjson.HandleError(w, err)
 		return
@@ -685,7 +685,7 @@ type putAvatarPayload struct {
 }
 
 // PutAvatar sets the user's avatar to the one given
-func PutAvatar(w http.ResponseWriter, r *http.Request) {
+func (c *Config) PutAvatar(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	u := middleware.UserFromContext(ctx)
 	body := bjson.BodyFromContext(ctx)
@@ -727,7 +727,7 @@ type magicLoginPayload struct {
 }
 
 // MagicLogin logs in a user with a signature.
-func MagicLogin(w http.ResponseWriter, r *http.Request) {
+func (c *Config) MagicLogin(w http.ResponseWriter, r *http.Request) {
 	op := errors.Op("handlers.MagicLogin")
 	ctx := r.Context()
 	body := bjson.BodyFromContext(ctx)
@@ -738,7 +738,7 @@ func MagicLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	u, err := models.GetUserByID(ctx, payload.UserID)
+	u, err := c.ModelsClient.GetUserByID(ctx, payload.UserID)
 	if err != nil {
 		bjson.HandleError(w, errors.E(op, err, http.StatusUnauthorized))
 		return

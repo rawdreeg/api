@@ -35,7 +35,7 @@ type createEventPayload struct {
 }
 
 // CreateEvent creates a event
-func CreateEvent(w http.ResponseWriter, r *http.Request) {
+func (c *Config) CreateEvent(w http.ResponseWriter, r *http.Request) {
 	var op errors.Op = "handlers.CreateEvent"
 
 	ctx := r.Context()
@@ -78,14 +78,14 @@ func CreateEvent(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Handle users
-	users, err := extractAndCreateUsers(ctx, ou, payload.Users)
+	users, err := extractAndCreateUsers(ctx, c.ModelsClient, ou, payload.Users)
 	if err != nil {
 		bjson.HandleError(w, err)
 		return
 	}
 
 	// Same thing for hosts
-	hosts, err := extractAndCreateUsers(ctx, ou, payload.Hosts)
+	hosts, err := extractAndCreateUsers(ctx, c.ModelsClient, ou, payload.Hosts)
 	if err != nil {
 		bjson.HandleError(w, err)
 		return
@@ -127,7 +127,7 @@ func CreateEvent(w http.ResponseWriter, r *http.Request) {
 // GetEvents Endpoint: GET /events
 
 // GetEvents gets the user's events
-func GetEvents(w http.ResponseWriter, r *http.Request) {
+func (c *Config) GetEvents(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	u := middleware.UserFromContext(ctx)
 	p := getPagination(r)
@@ -144,7 +144,7 @@ func GetEvents(w http.ResponseWriter, r *http.Request) {
 // GetEvent Endpoint: GET /events/{id}
 
 // GetEvent gets a event
-func GetEvent(w http.ResponseWriter, r *http.Request) {
+func (c *Config) GetEvent(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	u := middleware.UserFromContext(ctx)
 	event := middleware.EventFromContext(ctx)
@@ -172,7 +172,7 @@ type updateEventPayload struct {
 }
 
 // UpdateEvent allows the owner to change the event name and location
-func UpdateEvent(w http.ResponseWriter, r *http.Request) {
+func (c *Config) UpdateEvent(w http.ResponseWriter, r *http.Request) {
 	op := errors.Op("handlers.UpdateEvent")
 	ctx := r.Context()
 	u := middleware.UserFromContext(ctx)
@@ -200,7 +200,7 @@ func UpdateEvent(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	hosts, err := extractAndCreateUsers(ctx, u, payload.Hosts)
+	hosts, err := extractAndCreateUsers(ctx, c.ModelsClient, u, payload.Hosts)
 	if err != nil {
 		bjson.HandleError(w, err)
 		return
@@ -291,7 +291,7 @@ type deleteEventPayload struct {
 }
 
 // DeleteEvent allows the owner to delete the event
-func DeleteEvent(w http.ResponseWriter, r *http.Request) {
+func (c *Config) DeleteEvent(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	u := middleware.UserFromContext(ctx)
 	event := middleware.EventFromContext(ctx)
@@ -343,7 +343,7 @@ func DeleteEvent(w http.ResponseWriter, r *http.Request) {
 
 // AddUserToEvent adds a user to the event. Only owners can add participants.
 // Email addresses are also supported.
-func AddUserToEvent(w http.ResponseWriter, r *http.Request) {
+func (c *Config) AddUserToEvent(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	u := middleware.UserFromContext(ctx)
 	event := middleware.EventFromContext(ctx)
@@ -364,9 +364,9 @@ func AddUserToEvent(w http.ResponseWriter, r *http.Request) {
 	var userToBeAdded models.User
 	var err error
 	if isEmail(maybeUserID) {
-		userToBeAdded, err = createUserByEmail(ctx, maybeUserID)
+		userToBeAdded, err = createUserByEmail(ctx, c.ModelsClient, maybeUserID)
 	} else {
-		userToBeAdded, err = models.GetUserByID(ctx, maybeUserID)
+		userToBeAdded, err = c.ModelsClient.GetUserByID(ctx, maybeUserID)
 	}
 	if err != nil {
 		bjson.HandleError(w, err)
@@ -398,7 +398,7 @@ func AddUserToEvent(w http.ResponseWriter, r *http.Request) {
 
 // RemoveUserFromEvent removed a user from the event. The owner can remove
 // anyone. Participants can remove themselves.
-func RemoveUserFromEvent(w http.ResponseWriter, r *http.Request) {
+func (c *Config) RemoveUserFromEvent(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	tx, _ := db.TransactionFromContext(ctx)
 	u := middleware.UserFromContext(ctx)
@@ -407,7 +407,7 @@ func RemoveUserFromEvent(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	userID := vars["userID"]
 
-	userToBeRemoved, err := models.GetUserByID(ctx, userID)
+	userToBeRemoved, err := c.ModelsClient.GetUserByID(ctx, userID)
 	if err != nil {
 		bjson.HandleError(w, err)
 		return
@@ -447,7 +447,7 @@ func RemoveUserFromEvent(w http.ResponseWriter, r *http.Request) {
 // AddRSVPToEvent Endpoint: POST /events/{eventID}/rsvps
 
 // AddRSVPToEvent RSVPs a user to the event.
-func AddRSVPToEvent(w http.ResponseWriter, r *http.Request) {
+func (c *Config) AddRSVPToEvent(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	tx, _ := db.TransactionFromContext(ctx)
 	u := middleware.UserFromContext(ctx)
@@ -496,7 +496,7 @@ func AddRSVPToEvent(w http.ResponseWriter, r *http.Request) {
 
 // RemoveRSVPFromEvent removed a user from the event. The owner can remove
 // anyone. Participants can remove themselves.
-func RemoveRSVPFromEvent(w http.ResponseWriter, r *http.Request) {
+func (c *Config) RemoveRSVPFromEvent(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	tx, _ := db.TransactionFromContext(ctx)
 	u := middleware.UserFromContext(ctx)
@@ -544,7 +544,7 @@ type magicRSVPPayload struct {
 }
 
 // MagicRSVP rsvps a user without a registered account
-func MagicRSVP(w http.ResponseWriter, r *http.Request) {
+func (c *Config) MagicRSVP(w http.ResponseWriter, r *http.Request) {
 	op := errors.Op("handlers.MagicRSVP")
 	ctx := r.Context()
 	body := bjson.BodyFromContext(ctx)
@@ -556,7 +556,7 @@ func MagicRSVP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	u, err := models.GetUserByID(ctx, payload.UserID)
+	u, err := c.ModelsClient.GetUserByID(ctx, payload.UserID)
 	if err != nil {
 		bjson.HandleError(w, errors.E(op, err))
 		return
@@ -627,7 +627,7 @@ type magicInvitePayload struct {
 }
 
 // MagicInvite rsvps a user without a registered account
-func MagicInvite(w http.ResponseWriter, r *http.Request) {
+func (c *Config) MagicInvite(w http.ResponseWriter, r *http.Request) {
 	op := errors.Op("handlers.MagicInvite")
 	ctx := r.Context()
 	u := middleware.UserFromContext(ctx)
@@ -689,7 +689,7 @@ func MagicInvite(w http.ResponseWriter, r *http.Request) {
 // GetMagicLink Endpoint: GET /events/{eventID}/magic
 
 // GetMagicLink gets the magic link for the given event.
-func GetMagicLink(w http.ResponseWriter, r *http.Request) {
+func (c *Config) GetMagicLink(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	u := middleware.UserFromContext(ctx)
 	event := middleware.EventFromContext(ctx)
@@ -709,7 +709,7 @@ func GetMagicLink(w http.ResponseWriter, r *http.Request) {
 // RollMagicLink Endpoint: PUT /events/{eventID}/magic
 
 // RollMagicLink invalidates the current magic link and generates a new one.
-func RollMagicLink(w http.ResponseWriter, r *http.Request) {
+func (c *Config) RollMagicLink(w http.ResponseWriter, r *http.Request) {
 	op := errors.Op("handlers.RollMagicLink")
 	ctx := r.Context()
 	u := middleware.UserFromContext(ctx)

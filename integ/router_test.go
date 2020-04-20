@@ -11,8 +11,13 @@ import (
 
 	"cloud.google.com/go/datastore"
 
+	"github.com/hiconvo/api/db"
 	"github.com/hiconvo/api/handlers"
+	"github.com/hiconvo/api/mail"
 	"github.com/hiconvo/api/models"
+	"github.com/hiconvo/api/notifications"
+	"github.com/hiconvo/api/queue"
+	"github.com/hiconvo/api/search"
 	og "github.com/hiconvo/api/utils/opengraph"
 	"github.com/hiconvo/api/utils/places"
 	"github.com/hiconvo/api/utils/random"
@@ -20,9 +25,10 @@ import (
 )
 
 var (
-	tc      context.Context
-	th      http.Handler
-	tclient *datastore.Client
+	tc           context.Context
+	th           http.Handler
+	tclient      *datastore.Client
+	modelsClient *models.Client
 )
 
 func TestMain(m *testing.M) {
@@ -35,7 +41,15 @@ func TestMain(m *testing.M) {
 
 	// Set globals to be used by tests below
 	tc = ctx
-	th = handlers.New()
+	modelsClient = models.NewClient(
+		db.DefaultClient,
+		notifications.DefaultClient,
+		search.DefaultClient,
+		mail.DefaultClient,
+		queue.DefaultClient)
+	th = handlers.New(&handlers.Config{
+		ModelsClient: modelsClient,
+	})
 	tclient = client
 
 	result := m.Run()
@@ -52,7 +66,7 @@ func Test404(t *testing.T) {
 
 func createTestUser(t *testing.T) (models.User, string) {
 	password := random.String(20)
-	u, err := models.NewUserWithPassword(
+	u, err := modelsClient.NewUserWithPassword(
 		strings.ToLower(fmt.Sprintf("%s@test.com", random.String(20))),
 		random.String(20),
 		random.String(20),

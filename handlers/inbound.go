@@ -18,7 +18,7 @@ type inboundMessagePayload struct {
 	Body string `validate:"nonzero"`
 }
 
-func Inbound(w http.ResponseWriter, r *http.Request) {
+func (c *Config) Inbound(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
 	if err := r.ParseMultipartForm(10485760); err != nil {
@@ -49,7 +49,7 @@ func Inbound(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Get user from from address
-	user, found, err := models.GetUserByEmail(ctx, from)
+	user, found, err := c.ModelsClient.GetUserByEmail(ctx, from)
 	if !found {
 		sendErrorEmail(from)
 		handleClientErrorResponse(w, errors.New("Email not recognized"))

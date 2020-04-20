@@ -21,7 +21,7 @@ import (
 // GetMessagesByThread Endpoint: GET /threads/{id}/messages
 
 // GetMessagesByThread gets the messages from the given thread.
-func GetMessagesByThread(w http.ResponseWriter, r *http.Request) {
+func (c *Config) GetMessagesByThread(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	u := middleware.UserFromContext(ctx)
 	thread := middleware.ThreadFromContext(ctx)
@@ -52,7 +52,7 @@ type createMessagePayload struct {
 }
 
 // AddMessageToThread adds a message to the given thread.
-func AddMessageToThread(w http.ResponseWriter, r *http.Request) {
+func (c *Config) AddMessageToThread(w http.ResponseWriter, r *http.Request) {
 	op := errors.Op("handlers.AddMessageToThread")
 	ctx := r.Context()
 	u := middleware.UserFromContext(ctx)
@@ -153,7 +153,7 @@ func AddMessageToThread(w http.ResponseWriter, r *http.Request) {
 }
 
 // DeleteThreadMessage Endpoint: DELETE /threads/:threadId/messages/:messageId
-func DeleteThreadMessage(w http.ResponseWriter, r *http.Request) {
+func (c *Config) DeleteThreadMessage(w http.ResponseWriter, r *http.Request) {
 	op := errors.Op("handlers.DeleteThreadMessage")
 	ctx := r.Context()
 	tx, _ := db.TransactionFromContext(ctx)
@@ -217,7 +217,7 @@ func DeleteThreadMessage(w http.ResponseWriter, r *http.Request) {
 // GetMessagesByEvent Endpoint: GET /events/{id}/messages
 
 // GetMessagesByEvent gets the messages from the given thread.
-func GetMessagesByEvent(w http.ResponseWriter, r *http.Request) {
+func (c *Config) GetMessagesByEvent(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	u := middleware.UserFromContext(ctx)
 	event := middleware.EventFromContext(ctx)
@@ -242,7 +242,7 @@ func GetMessagesByEvent(w http.ResponseWriter, r *http.Request) {
 // AddMessageToEvent Endpoint: POST /events/:id/messages
 
 // AddMessageToEvent adds a message to the given thread.
-func AddMessageToEvent(w http.ResponseWriter, r *http.Request) {
+func (c *Config) AddMessageToEvent(w http.ResponseWriter, r *http.Request) {
 	op := errors.Op("handlers.AddMessageToEvent")
 	ctx := r.Context()
 	u := middleware.UserFromContext(ctx)
@@ -311,7 +311,7 @@ func AddMessageToEvent(w http.ResponseWriter, r *http.Request) {
 }
 
 // DeleteEventMessage Endpoint: DELETE /events/:eventId/messages/:messageId
-func DeleteEventMessage(w http.ResponseWriter, r *http.Request) {
+func (c *Config) DeleteEventMessage(w http.ResponseWriter, r *http.Request) {
 	op := errors.Op("handlers.DeleteEventMessage")
 	ctx := r.Context()
 	u := middleware.UserFromContext(ctx)
@@ -354,7 +354,7 @@ type deleteMessagePayload struct {
 }
 
 // DeletePhotoFromMessage deletes a photo from the given message
-func DeletePhotoFromMessage(w http.ResponseWriter, r *http.Request) {
+func (c *Config) DeletePhotoFromMessage(w http.ResponseWriter, r *http.Request) {
 	op := errors.Op("handlers.DeletePhotoFromMessage")
 	ctx := r.Context()
 	tx, _ := db.TransactionFromContext(ctx)

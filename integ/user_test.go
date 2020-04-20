@@ -9,7 +9,7 @@ import (
 	"testing"
 
 	"github.com/steinfletcher/apitest"
-	"github.com/steinfletcher/apitest-jsonpath"
+	jsonpath "github.com/steinfletcher/apitest-jsonpath"
 	"github.com/stretchr/testify/assert"
 
 	"github.com/hiconvo/api/models"
@@ -662,7 +662,7 @@ func TestVerifyEmail(t *testing.T) {
 			},
 			VerifyFunc: func() bool {
 				// Make sure that existingUser5 was deleted
-				_, err := models.GetUserByID(tc, existingUser5.ID)
+				_, err := modelsClient.GetUserByID(tc, existingUser5.ID)
 				if err == nil {
 					return false
 				}
@@ -722,7 +722,7 @@ func TestVerifyEmail(t *testing.T) {
 				}
 
 				// Make sure that existingUser2's contacts were updated
-				refreshedExistingUser2, err := models.GetUserByID(tc, existingUser2.ID)
+				refreshedExistingUser2, err := modelsClient.GetUserByID(tc, existingUser2.ID)
 				if err != nil {
 					return false
 				}

@@ -11,7 +11,7 @@ import (
 	"github.com/hiconvo/api/utils/bjson"
 )
 
-func GetContacts(w http.ResponseWriter, r *http.Request) {
+func (c *Config) GetContacts(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	u := middleware.UserFromContext(ctx)
 
@@ -24,7 +24,7 @@ func GetContacts(w http.ResponseWriter, r *http.Request) {
 	bjson.WriteJSON(w, map[string][]*models.UserPartial{"contacts": contacts}, http.StatusOK)
 }
 
-func AddContact(w http.ResponseWriter, r *http.Request) {
+func (c *Config) AddContact(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	u := middleware.UserFromContext(ctx)
 	vars := mux.Vars(r)
@@ -39,7 +39,7 @@ func AddContact(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	userToBeAdded, err := models.GetUserByID(ctx, userID)
+	userToBeAdded, err := c.ModelsClient.GetUserByID(ctx, userID)
 	if err != nil {
 		bjson.HandleError(w, err)
 		return
@@ -58,13 +58,13 @@ func AddContact(w http.ResponseWriter, r *http.Request) {
 	bjson.WriteJSON(w, models.MapUserToUserPartial(&userToBeAdded), http.StatusCreated)
 }
 
-func RemoveContact(w http.ResponseWriter, r *http.Request) {
+func (c *Config) RemoveContact(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	u := middleware.UserFromContext(ctx)
 	vars := mux.Vars(r)
 	userID := vars["userID"]
 
-	userToBeRemoved, err := models.GetUserByID(ctx, userID)
+	userToBeRemoved, err := c.ModelsClient.GetUserByID(ctx, userID)
 	if err != nil {
 		bjson.HandleError(w, err)
 		return

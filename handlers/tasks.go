@@ -15,7 +15,7 @@ import (
 	"github.com/hiconvo/api/utils/bjson"
 )
 
-func CreateDigest(w http.ResponseWriter, r *http.Request) {
+func (c *Config) CreateDigest(w http.ResponseWriter, r *http.Request) {
 	op := errors.Op("handlers.CreateDigest")
 
 	if val := r.Header.Get("X-Appengine-Cron"); val != "true" {
@@ -48,7 +48,7 @@ func CreateDigest(w http.ResponseWriter, r *http.Request) {
 	bjson.WriteJSON(w, map[string]string{"message": "pass"}, http.StatusOK)
 }
 
-func SendEmailsAsync(w http.ResponseWriter, r *http.Request) {
+func (c *Config) SendEmailsAsync(w http.ResponseWriter, r *http.Request) {
 	var op errors.Op = "handlers.SendEmailsAsync"
 
 	if val := r.Header.Get("X-Appengine-QueueName"); val != "convo-emails" {
@@ -73,7 +73,7 @@ func SendEmailsAsync(w http.ResponseWriter, r *http.Request) {
 	for i := range payload.IDs {
 		switch payload.Type {
 		case queue.User:
-			u, err := models.GetUserByID(ctx, payload.IDs[i])
+			u, err := c.ModelsClient.GetUserByID(ctx, payload.IDs[i])
 			if err != nil {
 				log.Alarm(errors.E(op, err))
 				break

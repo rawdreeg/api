@@ -95,10 +95,10 @@ func extractUsers(ctx context.Context, owner models.User, users []interface{}) (
 
 // createUserByEmail is a bit of a misnomer since we actually get or create
 // the user.
-func createUserByEmail(ctx context.Context, email string) (models.User, error) {
+func createUserByEmail(ctx context.Context, client *models.Client, email string) (models.User, error) {
 	op := errors.Op("handlers.createUserByEmail")
 
-	u, created, err := models.GetOrCreateUserByEmail(ctx, email)
+	u, created, err := client.GetOrCreateUserByEmail(ctx, email)
 	if err != nil {
 		return models.User{}, errors.E(op, err)
 	}
@@ -114,7 +114,7 @@ func createUserByEmail(ctx context.Context, email string) (models.User, error) {
 	return u, nil
 }
 
-func createUsersByEmail(ctx context.Context, emails []string) ([]models.User, []*datastore.Key, error) {
+func createUsersByEmail(ctx context.Context, client *models.Client, emails []string) ([]models.User, []*datastore.Key, error) {
 	op := errors.Op("handlers.createUsersByEmail")
 
 	var userStructs []models.User
@@ -124,7 +124,7 @@ func createUsersByEmail(ctx context.Context, emails []string) ([]models.User, []
 	var usersToCommitKeys []*datastore.Key
 
 	for i := range emails {
-		u, created, err := models.GetOrCreateUserByEmail(ctx, emails[i])
+		u, created, err := client.GetOrCreateUserByEmail(ctx, emails[i])
 		if err != nil {
 			return userStructs, userKeys, errors.E(op, err)
 		}
@@ -148,7 +148,7 @@ func createUsersByEmail(ctx context.Context, emails []string) ([]models.User, []
 		usersToCommit[i].ID = keys[i].Encode()
 	}
 
-	models.UserWelcomeMulti(ctx, usersToCommit)
+	client.UserWelcomeMulti(ctx, usersToCommit)
 
 	userStructs = append(userStructs, usersToCommit...)
 	userKeys = append(userKeys, usersToCommitKeys...)
@@ -156,13 +156,13 @@ func createUsersByEmail(ctx context.Context, emails []string) ([]models.User, []
 	return userStructs, userKeys, nil
 }
 
-func extractAndCreateUsers(ctx context.Context, ou models.User, users []interface{}) ([]*models.User, error) {
+func extractAndCreateUsers(ctx context.Context, client *models.Client, ou models.User, users []interface{}) ([]*models.User, error) {
 	userStructs, _, emails, err := extractUsers(ctx, ou, users)
 	if err != nil {
 		return []*models.User{}, err
 	}
 
-	newUsers, _, err := createUsersByEmail(ctx, emails)
+	newUsers, _, err := createUsersByEmail(ctx, client, emails)
 	if err != nil {
 		return []*models.User{}, err
 	}

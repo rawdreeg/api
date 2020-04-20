@@ -23,7 +23,7 @@ type createThreadPayload struct {
 }
 
 // CreateThread creates a thread
-func CreateThread(w http.ResponseWriter, r *http.Request) {
+func (c *Config) CreateThread(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	ou := middleware.UserFromContext(ctx)
 	body := bjson.BodyFromContext(ctx)
@@ -49,7 +49,7 @@ func CreateThread(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	users, err := extractAndCreateUsers(ctx, ou, payload.Users)
+	users, err := extractAndCreateUsers(ctx, c.ModelsClient, ou, payload.Users)
 	if err != nil {
 		bjson.HandleError(w, err)
 		return
@@ -72,7 +72,7 @@ func CreateThread(w http.ResponseWriter, r *http.Request) {
 // GetThreads Endpoint: GET /threads
 
 // GetThreads gets the user's threads
-func GetThreads(w http.ResponseWriter, r *http.Request) {
+func (c *Config) GetThreads(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	u := middleware.UserFromContext(ctx)
 	p := getPagination(r)
@@ -89,7 +89,7 @@ func GetThreads(w http.ResponseWriter, r *http.Request) {
 // GetThread Endpoint: GET /threads/{id}
 
 // GetThread gets a thread
-func GetThread(w http.ResponseWriter, r *http.Request) {
+func (c *Config) GetThread(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	u := middleware.UserFromContext(ctx)
 	thread := middleware.ThreadFromContext(ctx)
@@ -114,7 +114,7 @@ type updateThreadPayload struct {
 }
 
 // UpdateThread allows the owner to change the thread subject
-func UpdateThread(w http.ResponseWriter, r *http.Request) {
+func (c *Config) UpdateThread(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	tx, _ := db.TransactionFromContext(ctx)
 	u := middleware.UserFromContext(ctx)
@@ -153,7 +153,7 @@ func UpdateThread(w http.ResponseWriter, r *http.Request) {
 // DeleteThread Endpoint: DELETE /threads/{id}
 
 // DeleteThread allows the owner to delete the thread
-func DeleteThread(w http.ResponseWriter, r *http.Request) {
+func (c *Config) DeleteThread(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	u := middleware.UserFromContext(ctx)
 	thread := middleware.ThreadFromContext(ctx)
@@ -178,7 +178,7 @@ func DeleteThread(w http.ResponseWriter, r *http.Request) {
 // AddUserToThread Endpoint: POST /threads/{threadID}/users/{userID}
 
 // AddUserToThread adds a user to the thread. Only owners can add participants.
-func AddUserToThread(w http.ResponseWriter, r *http.Request) {
+func (c *Config) AddUserToThread(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	tx, _ := db.TransactionFromContext(ctx)
 	u := middleware.UserFromContext(ctx)
@@ -200,9 +200,9 @@ func AddUserToThread(w http.ResponseWriter, r *http.Request) {
 	var userToBeAdded models.User
 	var err error
 	if isEmail(maybeUserID) {
-		userToBeAdded, err = createUserByEmail(ctx, maybeUserID)
+		userToBeAdded, err = createUserByEmail(ctx, c.ModelsClient, maybeUserID)
 	} else {
-		userToBeAdded, err = models.GetUserByID(ctx, maybeUserID)
+		userToBeAdded, err = c.ModelsClient.GetUserByID(ctx, maybeUserID)
 	}
 	if err != nil {
 		bjson.HandleError(w, err)
@@ -232,7 +232,7 @@ func AddUserToThread(w http.ResponseWriter, r *http.Request) {
 
 // RemoveUserFromThread removed a user from the thread. The owner can remove
 // anyone. Participants can remove themselves.
-func RemoveUserFromThread(w http.ResponseWriter, r *http.Request) {
+func (c *Config) RemoveUserFromThread(w http.ResponseWriter, r *http.Request) {
 	op := errors.Op("handlers.RemoveUserFromThread")
 	ctx := r.Context()
 	tx, _ := db.TransactionFromContext(ctx)
@@ -242,7 +242,7 @@ func RemoveUserFromThread(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	userID := vars["userID"]
 
-	userToBeRemoved, err := models.GetUserByID(ctx, userID)
+	userToBeRemoved, err := c.ModelsClient.GetUserByID(ctx, userID)
 	if err != nil {
 		bjson.HandleError(w, err)
 		return

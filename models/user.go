@@ -25,6 +25,8 @@ import (
 )
 
 type User struct {
+	client *Client `datastore:"-"`
+
 	Key              *datastore.Key   `json:"-"        datastore:"__key__"`
 	ID               string           `json:"id"       datastore:"-"`
 	Email            string           `json:"email"`
@@ -48,10 +50,12 @@ type User struct {
 	CreatedAt        time.Time        `json:"-"`
 }
 
-func NewIncompleteUser(email string) (User, error) {
+func (c *Client) NewIncompleteUser(email string) (User, error) {
 	femail := strings.ToLower(email)
 
 	user := User{
+		client: c,
+
 		Key:       datastore.IncompleteKey("User", nil),
 		Email:     femail,
 		FirstName: strings.Split(femail, "@")[0],
@@ -63,7 +67,7 @@ func NewIncompleteUser(email string) (User, error) {
 	return user, nil
 }
 
-func NewUserWithPassword(email, firstname, lastname, password string) (User, error) {
+func (c *Client) NewUserWithPassword(email, firstname, lastname, password string) (User, error) {
 	hash, err := bcrypt.GenerateFromPassword([]byte(password), 10)
 	if err != nil {
 		return User{}, err
@@ -72,6 +76,8 @@ func NewUserWithPassword(email, firstname, lastname, password string) (User, err
 	femail := strings.ToLower(email)
 
 	user := User{
+		client: c,
+
 		Key:             datastore.IncompleteKey("User", nil),
 		Email:           femail,
 		FirstName:       firstname,
@@ -88,7 +94,7 @@ func NewUserWithPassword(email, firstname, lastname, password string) (User, err
 	return user, nil
 }
 
-func NewUserWithOAuth(email, firstname, lastname, avatar, oauthprovider, oauthtoken string) (User, error) {
+func (c *Client) NewUserWithOAuth(email, firstname, lastname, avatar, oauthprovider, oauthtoken string) (User, error) {
 	var googleID string
 	var facebookID string
 	if oauthprovider == "google" {
@@ -100,6 +106,8 @@ func NewUserWithOAuth(email, firstname, lastname, avatar, oauthprovider, oauthto
 	femail := strings.ToLower(email)
 
 	user := User{
+		client: c,
+
 		Key:             datastore.IncompleteKey("User", nil),
 		Email:           femail,
 		Emails:          []string{femail},
@@ -169,7 +177,7 @@ func (u *User) Commit(ctx context.Context) error {
 	u.FirstName = strings.TrimSpace(u.FirstName)
 	u.LastName = strings.TrimSpace(u.LastName)
 
-	key, err := db.DefaultClient.Put(ctx, u.Key, u)
+	key, err := u.client.db.Put(ctx, u.Key, u)
 	if err != nil {
 		return err
 	}
@@ -193,7 +201,7 @@ func (u *User) CommitWithTransaction(tx db.Transaction) (*datastore.PendingKey, 
 
 func (u *User) CreateOrUpdateSearchIndex(ctx context.Context) {
 	if u.IsRegistered() {
-		_, upsertErr := search.DefaultClient.Update().
+		_, upsertErr := u.client.search.Update().
 			Index("users").
 			Id(u.ID).
 			DocAsUpsert(true).
@@ -392,7 +400,7 @@ func (u *User) MakeEmailPrimary(email string) error {
 func (u *User) Welcome(ctx context.Context) {
 	var op errors.Op = "user.Welcome"
 
-	thread, err := NewThread("Welcome", _supportUser, []*User{u})
+	thread, err := NewThread("Welcome", u.client.supportUser, []*User{u})
 	if err != nil {
 		log.Alarm(errors.E(op, err))
 		return
@@ -408,7 +416,7 @@ func (u *User) Welcome(ctx context.Context) {
 		return
 	}
 
-	message, err := NewThreadMessage(_supportUser, &thread, _welcomeMessage, "", og.LinkData{})
+	message, err := NewThreadMessage(u.client.supportUser, &thread, u.client.welcomeMessage, "", og.LinkData{})
 	if err != nil {
 		log.Alarm(errors.E(op, err))
 		return
@@ -559,7 +567,7 @@ func (u *User) MergeWith(ctx context.Context, oldUser *User) error {
 	return err
 }
 
-func UserSearch(ctx context.Context, query string) ([]UserPartial, error) {
+func (c *Client) UserSearch(ctx context.Context, query string) ([]UserPartial, error) {
 	skip := 0
 	take := 10
 
@@ -568,7 +576,7 @@ func UserSearch(ctx context.Context, query string) ([]UserPartial, error) {
 	esQuery := elastic.NewMultiMatchQuery(query, "fullName", "firstName", "lastName").
 		Fuzziness("3").
 		MinimumShouldMatch("0")
-	result, err := search.DefaultClient.Search().
+	result, err := c.search.Search().
 		Index("users").
 		Query(esQuery).
 		From(skip).Size(take).
@@ -590,20 +598,20 @@ func UserSearch(ctx context.Context, query string) ([]UserPartial, error) {
 	return contacts, nil
 }
 
-func UserWelcomeMulti(ctx context.Context, users []User) {
+func (c *Client) UserWelcomeMulti(ctx context.Context, users []User) {
 	ids := make([]string, len(users))
 	for i := range users {
 		ids[i] = users[i].ID
 	}
 
-	queue.PutEmail(ctx, queue.EmailPayload{
+	c.queue.PutEmail(ctx, queue.EmailPayload{
 		Type:   queue.User,
 		Action: queue.SendWelcome,
 		IDs:    ids,
 	})
 }
 
-func GetUserByID(ctx context.Context, id string) (User, error) {
+func (c *Client) GetUserByID(ctx context.Context, id string) (User, error) {
 	u := User{}
 
 	key, err := datastore.DecodeKey(id)
@@ -611,7 +619,7 @@ func GetUserByID(ctx context.Context, id string) (User, error) {
 		return u, err
 	}
 
-	if err := db.DefaultClient.Get(ctx, key, &u); err != nil {
+	if err := c.db.Get(ctx, key, &u); err != nil {
 		if err == datastore.ErrNoSuchEntity {
 			return u, errors.E(errors.Op("models.GetUserByID"), http.StatusNotFound, err)
 		}
@@ -619,54 +627,60 @@ func GetUserByID(ctx context.Context, id string) (User, error) {
 		return u, err
 	}
 
+	u.client = c
+
 	return u, nil
 }
 
-func GetUserByEmail(ctx context.Context, email string) (User, bool, error) {
+func (c *Client) GetUserByEmail(ctx context.Context, email string) (User, bool, error) {
 	femail := strings.ToLower(email)
 
-	u, found, err := getUserByField(ctx, "Email", femail)
+	u, found, err := c.getUserByField(ctx, "Email", femail)
 	if !found && err == nil {
-		return getUserByField(ctx, "Emails", femail)
+		return c.getUserByField(ctx, "Emails", femail)
 	}
 
 	return u, found, err
 }
 
-func GetUserByToken(ctx context.Context, token string) (User, bool, error) {
-	return getUserByField(ctx, "Token", token)
+func (c *Client) GetUserByToken(ctx context.Context, token string) (User, bool, error) {
+	return c.getUserByField(ctx, "Token", token)
 }
 
-func GetUserByOAuthID(ctx context.Context, oauthtoken, provider string) (User, bool, error) {
+func (c *Client) GetUserByOAuthID(ctx context.Context, oauthtoken, provider string) (User, bool, error) {
 	if provider == "google" {
-		return getUserByField(ctx, "OAuthGoogleID", oauthtoken)
+		return c.getUserByField(ctx, "OAuthGoogleID", oauthtoken)
 	}
 
-	return getUserByField(ctx, "OAuthFacebookID", oauthtoken)
+	return c.getUserByField(ctx, "OAuthFacebookID", oauthtoken)
 }
 
-func GetUsersByThread(ctx context.Context, t *Thread) ([]*User, error) {
+func (c *Client) GetUsersByThread(ctx context.Context, t *Thread) ([]*User, error) {
 	var userKeys []*datastore.Key
 	copy(userKeys, t.UserKeys)
 	userKeys = append(userKeys, t.OwnerKey)
 
 	users := make([]*User, len(userKeys))
-	if err := db.DefaultClient.GetMulti(ctx, userKeys, users); err != nil {
+	if err := c.db.GetMulti(ctx, userKeys, users); err != nil {
 		return users, err
+	}
+
+	for i := range users {
+		users[i].client = c
 	}
 
 	return users, nil
 }
 
-func GetOrCreateUserByEmail(ctx context.Context, email string) (User, bool, error) {
-	u, found, err := GetUserByEmail(ctx, email)
+func (c *Client) GetOrCreateUserByEmail(ctx context.Context, email string) (User, bool, error) {
+	u, found, err := c.GetUserByEmail(ctx, email)
 	if err != nil {
 		return User{}, false, err
 	} else if found {
 		return u, false, nil
 	}
 
-	u, err = NewIncompleteUser(email)
+	u, err = c.NewIncompleteUser(email)
 	if err != nil {
 		return User{}, false, err
 	}
@@ -674,12 +688,12 @@ func GetOrCreateUserByEmail(ctx context.Context, email string) (User, bool, erro
 	return u, true, nil
 }
 
-func getUserByField(ctx context.Context, field, value string) (User, bool, error) {
+func (c *Client) getUserByField(ctx context.Context, field, value string) (User, bool, error) {
 	var users []User
 
 	q := datastore.NewQuery("User").Filter(fmt.Sprintf("%s =", field), value)
 
-	keys, getErr := db.DefaultClient.GetAll(ctx, q, &users)
+	keys, getErr := c.db.GetAll(ctx, q, &users)
 
 	if getErr != nil {
 		return User{}, false, getErr
@@ -687,6 +701,7 @@ func getUserByField(ctx context.Context, field, value string) (User, bool, error
 
 	if len(keys) == 1 {
 		user := users[0]
+		user.client = c
 		return user, true, nil
 	}
 

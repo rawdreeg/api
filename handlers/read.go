@@ -13,7 +13,7 @@ import (
 	"github.com/hiconvo/api/utils/bjson"
 )
 
-func MarkThreadAsRead(w http.ResponseWriter, r *http.Request) {
+func (c *Config) MarkThreadAsRead(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	user := middleware.UserFromContext(ctx)
 	thread := middleware.ThreadFromContext(ctx)
@@ -42,7 +42,7 @@ func MarkThreadAsRead(w http.ResponseWriter, r *http.Request) {
 	bjson.WriteJSON(w, thread, http.StatusOK)
 }
 
-func MarkEventAsRead(w http.ResponseWriter, r *http.Request) {
+func (c *Config) MarkEventAsRead(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	user := middleware.UserFromContext(ctx)
 	event := middleware.EventFromContext(ctx)
