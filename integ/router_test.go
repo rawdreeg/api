@@ -89,7 +89,7 @@ func createTestUser(t *testing.T) (models.User, string) {
 
 func createTestThread(t *testing.T, owner *models.User, users []*models.User) models.Thread {
 	// Create the thread.
-	thread, err := models.NewThread("test", owner, users)
+	thread, err := modelsClient.NewThread("test", owner, users)
 	if err != nil {
 		t.Fatal(err)
 	}

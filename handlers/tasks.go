@@ -95,7 +95,7 @@ func (c *Config) SendEmailsAsync(w http.ResponseWriter, r *http.Request) {
 				e.SendUpdatedInvites(ctx)
 			}
 		case queue.Thread:
-			t, err := models.GetThreadByID(ctx, payload.IDs[i])
+			t, err := c.ModelsClient.GetThreadByID(ctx, payload.IDs[i])
 			if err != nil {
 				log.Alarm(errors.E(op, err))
 				break

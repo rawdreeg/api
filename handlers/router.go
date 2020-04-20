@@ -69,7 +69,7 @@ func New(c *Config) http.Handler {
 	txEventSubrouter.HandleFunc("/events/{eventID}/magic", c.RollMagicLink).Methods("DELETE")
 	// Threads
 	txThreadSubrouter := txSubrouter.NewRoute().Subrouter()
-	txThreadSubrouter.Use(middleware.WithUser(c.ModelsClient), middleware.WithThread)
+	txThreadSubrouter.Use(middleware.WithUser(c.ModelsClient), middleware.WithThread(c.ModelsClient))
 	txThreadSubrouter.HandleFunc("/threads/{threadID}", c.UpdateThread).Methods("PATCH")
 	txThreadSubrouter.HandleFunc("/threads/{threadID}/users/{userID}", c.AddUserToThread).Methods("POST")
 	txThreadSubrouter.HandleFunc("/threads/{threadID}/users/{userID}", c.RemoveUserFromThread).Methods("DELETE")
@@ -108,7 +108,7 @@ func New(c *Config) http.Handler {
 	////
 
 	threadSubrouter := authSubrouter.NewRoute().Subrouter()
-	threadSubrouter.Use(middleware.WithThread)
+	threadSubrouter.Use(middleware.WithThread(c.ModelsClient))
 	threadSubrouter.HandleFunc("/threads/{threadID}", c.GetThread).Methods("GET")
 	threadSubrouter.HandleFunc("/threads/{threadID}", c.DeleteThread).Methods("DELETE")
 	threadSubrouter.HandleFunc("/threads/{threadID}/messages", c.GetMessagesByThread).Methods("GET")

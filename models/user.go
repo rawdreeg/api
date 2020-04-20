@@ -400,7 +400,7 @@ func (u *User) MakeEmailPrimary(email string) error {
 func (u *User) Welcome(ctx context.Context) {
 	var op errors.Op = "user.Welcome"
 
-	thread, err := NewThread("Welcome", u.client.supportUser, []*User{u})
+	thread, err := u.client.NewThread("Welcome", u.client.supportUser, []*User{u})
 	if err != nil {
 		log.Alarm(errors.E(op, err))
 		return
@@ -440,7 +440,7 @@ func (u *User) SendDigest(ctx context.Context) error {
 		return err
 	}
 
-	threads, err := GetThreadsByUser(ctx, u, &Pagination{})
+	threads, err := u.client.GetThreadsByUser(ctx, u, &Pagination{})
 	if err != nil {
 		return err
 	}
@@ -492,27 +492,27 @@ func (u *User) MergeWith(ctx context.Context, oldUser *User) error {
 		return errors.Str("models.MergeWith: oldUser's key is incomplete")
 	}
 
-	_, err := db.DefaultClient.RunInTransaction(ctx, func(tx *datastore.Transaction) error {
+	_, err := u.client.db.RunInTransaction(ctx, func(tx *datastore.Transaction) error {
 		// Contacts
-		err := reassignContacts(ctx, tx, oldUser, u)
+		err := u.client.reassignContacts(ctx, tx, oldUser, u)
 		if err != nil {
 			return err
 		}
 
 		// Messages
-		err = reassignMessageUsers(ctx, tx, oldUser, u)
+		err = u.client.reassignMessageUsers(ctx, tx, oldUser, u)
 		if err != nil {
 			return err
 		}
 
 		// Threads
-		err = reassignThreadUsers(ctx, tx, oldUser, u)
+		err = u.client.reassignThreadUsers(ctx, tx, oldUser, u)
 		if err != nil {
 			return err
 		}
 
 		// Events
-		err = reassignEventUsers(ctx, tx, oldUser, u)
+		err = u.client.reassignEventUsers(ctx, tx, oldUser, u)
 		if err != nil {
 			return err
 		}
@@ -530,7 +530,7 @@ func (u *User) MergeWith(ctx context.Context, oldUser *User) error {
 		for _, email := range oldUser.Emails {
 			u.AddEmail(email)
 		}
-		u.ContactKeys = mergeContacts(u.ContactKeys, oldUser.ContactKeys)
+		u.ContactKeys = u.client.mergeContacts(u.ContactKeys, oldUser.ContactKeys)
 		u.RemoveContact(oldUser)
 
 		// Save user
@@ -710,4 +710,126 @@ func (c *Client) getUserByField(ctx context.Context, field, value string) (User,
 	}
 
 	return User{}, false, nil
+}
+
+func (c *Client) mergeContacts(a, b []*datastore.Key) []*datastore.Key {
+	var all []*datastore.Key
+	all = append(all, a...)
+	all = append(all, b...)
+
+	var merged []*datastore.Key
+	seen := make(map[string]struct{})
+
+	for i := range all {
+		keyString := all[i].String()
+
+		if _, isSeen := seen[keyString]; isSeen {
+			continue
+		}
+
+		seen[keyString] = struct{}{}
+		merged = append(merged, all[i])
+	}
+
+	return merged
+}
+
+func (c *Client) reassignContacts(ctx context.Context, tx *datastore.Transaction, oldUser, newUser *User) error {
+	var users []*User
+	q := datastore.NewQuery("User").Filter("ContactKeys =", oldUser.Key)
+	keys, err := c.db.GetAll(ctx, q, &users)
+	if err != nil {
+		return err
+	}
+
+	for i := range users {
+		users[i].ContactKeys = swapKeys(users[i].ContactKeys, oldUser.Key, newUser.Key)
+	}
+
+	_, err = tx.PutMulti(keys, users)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (c *Client) reassignMessageUsers(ctx context.Context, tx *datastore.Transaction, old, newUser *User) error {
+	userMessages, err := GetUnhydratedMessagesByUser(ctx, old)
+	if err != nil {
+		return err
+	}
+
+	// Reassign ownership of messages and save keys to oldUserMessageKeys slice
+	userMessageKeys := make([]*datastore.Key, len(userMessages))
+	for i := range userMessages {
+		userMessages[i].UserKey = newUser.Key
+		userMessages[i].Reads = swapReadUserKeys(userMessages[i].Reads, old.Key, newUser.Key)
+		userMessageKeys[i] = userMessages[i].Key
+	}
+
+	// Save the messages
+	_, err = tx.PutMulti(userMessageKeys, userMessages)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (c *Client) reassignThreadUsers(ctx context.Context, tx *datastore.Transaction, old, newUser *User) error {
+	userThreads, err := c.GetUnhydratedThreadsByUser(ctx, old, &Pagination{Size: -1})
+	if err != nil {
+		return err
+	}
+
+	// Reassign ownership of threads and save keys to oldUserThreadKeys slice
+	userThreadKeys := make([]*datastore.Key, len(userThreads))
+	for i := range userThreads {
+		userThreads[i].UserKeys = swapKeys(userThreads[i].UserKeys, old.Key, newUser.Key)
+		userThreads[i].Reads = swapReadUserKeys(userThreads[i].Reads, old.Key, newUser.Key)
+
+		if userThreads[i].OwnerKey.Equal(old.Key) {
+			userThreads[i].OwnerKey = newUser.Key
+		}
+
+		userThreadKeys[i] = userThreads[i].Key
+	}
+
+	// Save the threads
+	_, err = tx.PutMulti(userThreadKeys, userThreads)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (c *Client) reassignEventUsers(ctx context.Context, tx *datastore.Transaction, old, newUser *User) error {
+	userEvents, err := GetUnhydratedEventsByUser(ctx, old, &Pagination{Size: -1})
+	if err != nil {
+		return err
+	}
+
+	// Reassign ownership of events and save keys to userEvetKeys slice
+	userEventKeys := make([]*datastore.Key, len(userEvents))
+	for i := range userEvents {
+		userEvents[i].UserKeys = swapKeys(userEvents[i].UserKeys, old.Key, newUser.Key)
+		userEvents[i].RSVPKeys = swapKeys(userEvents[i].RSVPKeys, old.Key, newUser.Key)
+		userEvents[i].Reads = swapReadUserKeys(userEvents[i].Reads, old.Key, newUser.Key)
+
+		if userEvents[i].OwnerKey.Equal(old.Key) {
+			userEvents[i].OwnerKey = newUser.Key
+		}
+
+		userEventKeys[i] = userEvents[i].Key
+	}
+
+	// Save the events
+	_, err = tx.PutMulti(userEventKeys, userEvents)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }

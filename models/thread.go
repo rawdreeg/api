@@ -15,6 +15,8 @@ import (
 )
 
 type Thread struct {
+	client *Client `datastore:"-"`
+
 	Key           *datastore.Key   `json:"-"        datastore:"__key__"`
 	ID            string           `json:"id"       datastore:"-"`
 	OwnerKey      *datastore.Key   `json:"-"`
@@ -30,7 +32,7 @@ type Thread struct {
 	ResponseCount int              `json:"responseCount" datastore:",noindex"`
 }
 
-func NewThread(subject string, owner *User, users []*User) (Thread, error) {
+func (c *Client) NewThread(subject string, owner *User, users []*User) (Thread, error) {
 	// Get all of the users' keys, remove duplicates, and check whether
 	// the owner was included in the users slice
 	userKeys := make([]*datastore.Key, 0)
@@ -79,6 +81,8 @@ func NewThread(subject string, owner *User, users []*User) (Thread, error) {
 	}
 
 	return Thread{
+		client: c,
+
 		Key:          datastore.IncompleteKey("Thread", nil),
 		OwnerKey:     owner.Key,
 		Owner:        MapUserToUserPartial(owner),
@@ -151,7 +155,7 @@ func (t *Thread) CommitWithTransaction(tx db.Transaction) (*datastore.PendingKey
 }
 
 func (t *Thread) Delete(ctx context.Context) error {
-	if err := db.DefaultClient.Delete(ctx, t.Key); err != nil {
+	if err := t.client.db.Delete(ctx, t.Key); err != nil {
 		return err
 	}
 	return nil
@@ -258,7 +262,7 @@ func (t *Thread) Send(ctx context.Context) error {
 }
 
 func (t *Thread) SendAsync(ctx context.Context) error {
-	return queue.PutEmail(ctx, queue.EmailPayload{
+	return t.client.queue.PutEmail(ctx, queue.EmailPayload{
 		Type:   queue.Thread,
 		Action: queue.SendThread,
 		IDs:    []string{t.ID},
@@ -270,7 +274,7 @@ func (t *Thread) IncRespCount() error {
 	return nil
 }
 
-func GetThreadByID(ctx context.Context, id string) (Thread, error) {
+func (c *Client) GetThreadByID(ctx context.Context, id string) (Thread, error) {
 	var t Thread
 
 	key, err := datastore.DecodeKey(id)
@@ -278,18 +282,18 @@ func GetThreadByID(ctx context.Context, id string) (Thread, error) {
 		return t, err
 	}
 
-	return handleGetThread(ctx, key, t)
+	return c.handleGetThread(ctx, key, t)
 }
 
-func GetThreadByInt64ID(ctx context.Context, id int64) (Thread, error) {
+func (c *Client) GetThreadByInt64ID(ctx context.Context, id int64) (Thread, error) {
 	var t Thread
 
 	key := datastore.IDKey("Thread", id, nil)
 
-	return handleGetThread(ctx, key, t)
+	return c.handleGetThread(ctx, key, t)
 }
 
-func GetUnhydratedThreadsByUser(ctx context.Context, u *User, p *Pagination) ([]*Thread, error) {
+func (c *Client) GetUnhydratedThreadsByUser(ctx context.Context, u *User, p *Pagination) ([]*Thread, error) {
 	var threads []*Thread
 
 	q := datastore.NewQuery("Thread").
@@ -298,17 +302,21 @@ func GetUnhydratedThreadsByUser(ctx context.Context, u *User, p *Pagination) ([]
 		Offset(p.Offset()).
 		Limit(p.Limit())
 
-	_, err := db.DefaultClient.GetAll(ctx, q, &threads)
+	_, err := c.db.GetAll(ctx, q, &threads)
 	if err != nil {
 		return threads, err
+	}
+
+	for i := range threads {
+		threads[i].client = c
 	}
 
 	return threads, nil
 }
 
-func GetThreadsByUser(ctx context.Context, u *User, p *Pagination) ([]*Thread, error) {
+func (c *Client) GetThreadsByUser(ctx context.Context, u *User, p *Pagination) ([]*Thread, error) {
 	// Get all of the threads of which the user is a member
-	threads, err := GetUnhydratedThreadsByUser(ctx, u, p)
+	threads, err := c.GetUnhydratedThreadsByUser(ctx, u, p)
 	if err != nil {
 		return threads, err
 	}
@@ -325,7 +333,7 @@ func GetThreadsByUser(ctx context.Context, u *User, p *Pagination) ([]*Thread, e
 
 	// We get all of the users in one go.
 	userPtrs := make([]*User, len(userKeys))
-	if err := db.DefaultClient.GetMulti(ctx, userKeys, userPtrs); err != nil {
+	if err := c.db.GetMulti(ctx, userKeys, userPtrs); err != nil {
 		return threads, err
 	}
 
@@ -348,6 +356,7 @@ func GetThreadsByUser(ctx context.Context, u *User, p *Pagination) ([]*Thread, e
 			}
 		}
 
+		threads[i].client = c
 		threads[i].Users = threadUsers
 		threads[i].Owner = MapUserToUserPartial(owner)
 		threads[i].UserPartials = MapUsersToUserPartials(threadUsers)
@@ -360,13 +369,13 @@ func GetThreadsByUser(ctx context.Context, u *User, p *Pagination) ([]*Thread, e
 	return threadPtrs, nil
 }
 
-func handleGetThread(ctx context.Context, key *datastore.Key, t Thread) (Thread, error) {
-	if err := db.DefaultClient.Get(ctx, key, &t); err != nil {
+func (c *Client) handleGetThread(ctx context.Context, key *datastore.Key, t Thread) (Thread, error) {
+	if err := c.db.Get(ctx, key, &t); err != nil {
 		return t, err
 	}
 
 	users := make([]User, len(t.UserKeys))
-	if err := db.DefaultClient.GetMulti(ctx, t.UserKeys, users); err != nil {
+	if err := c.db.GetMulti(ctx, t.UserKeys, users); err != nil {
 		return t, err
 	}
 
@@ -380,6 +389,7 @@ func handleGetThread(ctx context.Context, key *datastore.Key, t Thread) (Thread,
 		}
 	}
 
+	t.client = c
 	t.Users = userPointers
 	t.UserPartials = MapUsersToUserPartials(userPointers)
 	t.UserReads = MapReadsToUserPartials(&t, userPointers)

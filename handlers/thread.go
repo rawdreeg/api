@@ -55,7 +55,7 @@ func (c *Config) CreateThread(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	thread, err := models.NewThread(html.UnescapeString(payload.Subject), &ou, users)
+	thread, err := c.ModelsClient.NewThread(html.UnescapeString(payload.Subject), &ou, users)
 	if err != nil {
 		bjson.HandleError(w, err)
 		return
@@ -77,7 +77,7 @@ func (c *Config) GetThreads(w http.ResponseWriter, r *http.Request) {
 	u := middleware.UserFromContext(ctx)
 	p := getPagination(r)
 
-	threads, err := models.GetThreadsByUser(ctx, &u, p)
+	threads, err := c.ModelsClient.GetThreadsByUser(ctx, &u, p)
 	if err != nil {
 		bjson.HandleError(w, err)
 		return

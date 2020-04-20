@@ -41,7 +41,7 @@ func (c *Config) Inbound(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Get the thread
-	thread, err := models.GetThreadByInt64ID(ctx, threadID)
+	thread, err := c.ModelsClient.GetThreadByInt64ID(ctx, threadID)
 	if err != nil {
 		sendTryAgainEmail(from)
 		handleClientErrorResponse(w, err)
