@@ -59,7 +59,7 @@ func New(c *Config) http.Handler {
 	txSubrouter.HandleFunc("/events/rsvps", c.MagicRSVP).Methods("POST")
 	// Events
 	txEventSubrouter := txSubrouter.NewRoute().Subrouter()
-	txEventSubrouter.Use(middleware.WithUser(c.ModelsClient), middleware.WithEvent)
+	txEventSubrouter.Use(middleware.WithUser(c.ModelsClient), middleware.WithEvent(c.ModelsClient))
 	txEventSubrouter.HandleFunc("/events/{eventID}", c.UpdateEvent).Methods("PATCH")
 	txEventSubrouter.HandleFunc("/events/{eventID}/users/{userID}", c.AddUserToEvent).Methods("POST")
 	txEventSubrouter.HandleFunc("/events/{eventID}/users/{userID}", c.RemoveUserFromEvent).Methods("DELETE")
@@ -119,7 +119,7 @@ func New(c *Config) http.Handler {
 	////
 
 	eventSubrouter := authSubrouter.NewRoute().Subrouter()
-	eventSubrouter.Use(middleware.WithEvent)
+	eventSubrouter.Use(middleware.WithEvent(c.ModelsClient))
 	eventSubrouter.HandleFunc("/events/{eventID}", c.GetEvent).Methods("GET")
 	eventSubrouter.HandleFunc("/events/{eventID}", c.DeleteEvent).Methods("DELETE")
 	eventSubrouter.HandleFunc("/events/{eventID}/messages", c.GetMessagesByEvent).Methods("GET")

@@ -435,7 +435,7 @@ func (u *User) Welcome(ctx context.Context) {
 }
 
 func (u *User) SendDigest(ctx context.Context) error {
-	events, err := GetEventsByUser(ctx, u, &Pagination{})
+	events, err := u.client.GetEventsByUser(ctx, u, &Pagination{})
 	if err != nil {
 		return err
 	}
@@ -806,7 +806,7 @@ func (c *Client) reassignThreadUsers(ctx context.Context, tx *datastore.Transact
 }
 
 func (c *Client) reassignEventUsers(ctx context.Context, tx *datastore.Transaction, old, newUser *User) error {
-	userEvents, err := GetUnhydratedEventsByUser(ctx, old, &Pagination{Size: -1})
+	userEvents, err := c.GetUnhydratedEventsByUser(ctx, old, &Pagination{Size: -1})
 	if err != nil {
 		return err
 	}

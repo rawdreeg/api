@@ -83,7 +83,7 @@ func (c *Config) SendEmailsAsync(w http.ResponseWriter, r *http.Request) {
 				u.Welcome(ctx)
 			}
 		case queue.Event:
-			e, err := models.GetEventByID(ctx, payload.IDs[i])
+			e, err := c.ModelsClient.GetEventByID(ctx, payload.IDs[i])
 			if err != nil {
 				log.Alarm(errors.E(op, err))
 				break

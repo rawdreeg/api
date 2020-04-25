@@ -122,7 +122,7 @@ func createTestThreadMessage(t *testing.T, user *models.User, thread *models.Thr
 
 func createTestEvent(t *testing.T, owner *models.User, users, hosts []*models.User) *models.Event {
 	// Create the thread.
-	event, err := models.NewEvent(
+	event, err := modelsClient.NewEvent(
 		"test",
 		"locKey",
 		"loc",

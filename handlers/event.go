@@ -93,7 +93,7 @@ func (c *Config) CreateEvent(w http.ResponseWriter, r *http.Request) {
 
 	// With userPointers in hand, we can now create the event object. We set
 	// the original requestor `ou` as the owner.
-	event, err := models.NewEvent(
+	event, err := c.ModelsClient.NewEvent(
 		html.UnescapeString(payload.Name),
 		html.UnescapeString(payload.Description),
 		place.PlaceID,
@@ -132,7 +132,7 @@ func (c *Config) GetEvents(w http.ResponseWriter, r *http.Request) {
 	u := middleware.UserFromContext(ctx)
 	p := getPagination(r)
 
-	events, err := models.GetEventsByUser(ctx, &u, p)
+	events, err := c.ModelsClient.GetEventsByUser(ctx, &u, p)
 	if err != nil {
 		bjson.HandleError(w, err)
 		return
@@ -507,7 +507,6 @@ func (c *Config) RemoveRSVPFromEvent(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Save the event.
 	if _, err := event.CommitWithTransaction(tx); err != nil {
 		bjson.HandleError(w, err)
 		return
@@ -562,7 +561,7 @@ func (c *Config) MagicRSVP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	e, err := models.GetEventByID(ctx, payload.EventID)
+	e, err := c.ModelsClient.GetEventByID(ctx, payload.EventID)
 	if err != nil {
 		bjson.HandleError(w, errors.E(op, err))
 		return

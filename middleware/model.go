@@ -20,14 +20,14 @@ const (
 	eventKey
 )
 
-// UserFromContext retuns the User object that was added to the context via
+// UserFromContext returns the User object that was added to the context via
 // WithUser middleware.
 func UserFromContext(ctx context.Context) models.User {
 	return ctx.Value(userKey).(models.User)
 }
 
 // WithUser adds the authenticated user to the context. If the user cannot be
-// found, then a 401 unauthorized reponse is returned.
+// found, then a 401 unauthorized response is returned.
 func WithUser(c *models.Client) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -64,39 +64,40 @@ func GetAuthToken(h http.Header) (string, bool) {
 	return "", false
 }
 
-// EventFromContext retuns the Event object that was added to the context via
+// EventFromContext returns the Event object that was added to the context via
 // WithEvent middleware.
 func EventFromContext(ctx context.Context) models.Event {
 	return ctx.Value(eventKey).(models.Event)
 }
 
 // WithEvent adds the event indicated in the url to the context. If the event
-// cannot be found, then a 404 reponse is returned.
-func WithEvent(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		ctx := r.Context()
-		vars := mux.Vars(r)
-		id := vars["eventID"]
+// cannot be found, then a 404 response is returned.
+func WithEvent(c *models.Client) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			ctx := r.Context()
+			vars := mux.Vars(r)
+			id := vars["eventID"]
 
-		event, err := models.GetEventByID(ctx, id)
-		if err != nil {
-			bjson.HandleError(w, errors.E(errors.Op("middleware.WithEvent"), http.StatusNotFound, err))
-			return
-		}
+			event, err := c.GetEventByID(ctx, id)
+			if err != nil {
+				bjson.HandleError(w, errors.E(errors.Op("middleware.WithEvent"), http.StatusNotFound, err))
+				return
+			}
 
-		next.ServeHTTP(w, r.WithContext(context.WithValue(ctx, eventKey, event)))
-		return
-	})
+			next.ServeHTTP(w, r.WithContext(context.WithValue(ctx, eventKey, event)))
+		})
+	}
 }
 
-// ThreadFromContext retuns the Thread object that was added to the context via
+// ThreadFromContext returns the Thread object that was added to the context via
 // WithThread middleware.
 func ThreadFromContext(ctx context.Context) models.Thread {
 	return ctx.Value(threadKey).(models.Thread)
 }
 
 // WithThread adds the thread indicated in the url to the context. If the thread
-// cannot be found, then a 404 reponse is returned.
+// cannot be found, then a 404 response is returned.
 func WithThread(c *models.Client) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -111,7 +112,6 @@ func WithThread(c *models.Client) func(http.Handler) http.Handler {
 			}
 
 			next.ServeHTTP(w, r.WithContext(context.WithValue(ctx, threadKey, thread)))
-			return
 		})
 	}
 }

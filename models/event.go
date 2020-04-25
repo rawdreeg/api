@@ -18,6 +18,8 @@ import (
 )
 
 type Event struct {
+	client *Client `datastore:"-"`
+
 	Key             *datastore.Key   `json:"-"        datastore:"__key__"`
 	Token           string           `json:"-"`
 	ID              string           `json:"id"       datastore:"-"`
@@ -44,7 +46,7 @@ type Event struct {
 	GuestsCanInvite bool             `json:"guestsCanInvite"`
 }
 
-func NewEvent(
+func (c *Client) NewEvent(
 	name, description, placeID, address string,
 	lat, lng float64,
 	timestamp time.Time,
@@ -108,6 +110,8 @@ func NewEvent(
 	}
 
 	return Event{
+		client: c,
+
 		Key:             datastore.IncompleteKey("Event", nil),
 		Token:           random.Token(),
 		OwnerKey:        owner.Key,
@@ -161,7 +165,7 @@ func (e *Event) Commit(ctx context.Context) error {
 		e.CreatedAt = time.Now()
 	}
 
-	key, err := db.DefaultClient.Put(ctx, e.Key, e)
+	key, err := e.client.db.Put(ctx, e.Key, e)
 	if err != nil {
 		return err
 	}
@@ -177,7 +181,7 @@ func (e *Event) CommitWithTransaction(tx db.Transaction) (*datastore.PendingKey,
 }
 
 func (e *Event) Delete(ctx context.Context) error {
-	if err := db.DefaultClient.Delete(ctx, e.Key); err != nil {
+	if err := e.client.db.Delete(ctx, e.Key); err != nil {
 		return err
 	}
 	return nil
@@ -438,7 +442,7 @@ func (e *Event) GetMagicLink() string {
 	return magic.NewLink(e.Key, e.Token, "invite")
 }
 
-func GetEventByID(ctx context.Context, id string) (Event, error) {
+func (c *Client) GetEventByID(ctx context.Context, id string) (Event, error) {
 	var e Event
 
 	key, err := datastore.DecodeKey(id)
@@ -446,10 +450,10 @@ func GetEventByID(ctx context.Context, id string) (Event, error) {
 		return e, err
 	}
 
-	return handleGetEvent(ctx, key, e)
+	return c.handleGetEvent(ctx, key, e)
 }
 
-func GetUnhydratedEventsByUser(ctx context.Context, u *User, p *Pagination) ([]*Event, error) {
+func (c *Client) GetUnhydratedEventsByUser(ctx context.Context, u *User, p *Pagination) ([]*Event, error) {
 	var events []*Event
 
 	q := datastore.NewQuery("Event").
@@ -458,17 +462,21 @@ func GetUnhydratedEventsByUser(ctx context.Context, u *User, p *Pagination) ([]*
 		Offset(p.Offset()).
 		Limit(p.Limit())
 
-	_, err := db.DefaultClient.GetAll(ctx, q, &events)
+	_, err := c.db.GetAll(ctx, q, &events)
 	if err != nil {
 		return events, err
+	}
+
+	for i := range events {
+		events[i].client = c
 	}
 
 	return events, nil
 }
 
-func GetEventsByUser(ctx context.Context, u *User, p *Pagination) ([]*Event, error) {
+func (c *Client) GetEventsByUser(ctx context.Context, u *User, p *Pagination) ([]*Event, error) {
 	// Get all of the events of which the user is a member
-	events, err := GetUnhydratedEventsByUser(ctx, u, p)
+	events, err := c.GetUnhydratedEventsByUser(ctx, u, p)
 	if err != nil {
 		return events, err
 	}
@@ -485,7 +493,7 @@ func GetEventsByUser(ctx context.Context, u *User, p *Pagination) ([]*Event, err
 
 	// We get all of the users in one go.
 	userPtrs := make([]*User, len(uKeys))
-	if err := db.DefaultClient.GetMulti(ctx, uKeys, userPtrs); err != nil {
+	if err := c.db.GetMulti(ctx, uKeys, userPtrs); err != nil {
 		return events, err
 	}
 
@@ -524,6 +532,7 @@ func GetEventsByUser(ctx context.Context, u *User, p *Pagination) ([]*Event, err
 		events[i].RSVPs = MapUsersToUserPartials(eventRSVPs)
 		events[i].HostPartials = MapUsersToUserPartials(eventHosts)
 		events[i].UserReads = MapReadsToUserPartials(events[i], eventUsers)
+		events[i].client = c
 
 		start += idxs[i]
 		eventPtrs[i] = events[i]
@@ -532,8 +541,8 @@ func GetEventsByUser(ctx context.Context, u *User, p *Pagination) ([]*Event, err
 	return eventPtrs, nil
 }
 
-func handleGetEvent(ctx context.Context, key *datastore.Key, e Event) (Event, error) {
-	if err := db.DefaultClient.Get(ctx, key, &e); err != nil {
+func (c *Client) handleGetEvent(ctx context.Context, key *datastore.Key, e Event) (Event, error) {
+	if err := c.db.Get(ctx, key, &e); err != nil {
 		if err == datastore.ErrNoSuchEntity {
 			return e, errors.E(errors.Op("models.handleGetEvent"), http.StatusNotFound, err)
 		}
@@ -542,7 +551,7 @@ func handleGetEvent(ctx context.Context, key *datastore.Key, e Event) (Event, er
 	}
 
 	users := make([]User, len(e.UserKeys))
-	if err := db.DefaultClient.GetMulti(ctx, e.UserKeys, users); err != nil {
+	if err := c.db.GetMulti(ctx, e.UserKeys, users); err != nil {
 		return e, err
 	}
 
@@ -572,6 +581,7 @@ func handleGetEvent(ctx context.Context, key *datastore.Key, e Event) (Event, er
 	e.HostPartials = MapUsersToUserPartials(hostPointers)
 	e.RSVPs = MapUsersToUserPartials(rsvpPointers)
 	e.UserReads = MapReadsToUserPartials(&e, userPointers)
+	e.client = c
 
 	return e, nil
 }
