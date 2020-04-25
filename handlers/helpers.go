@@ -10,12 +10,11 @@ import (
 
 	"cloud.google.com/go/datastore"
 
-	"github.com/hiconvo/api/db"
 	"github.com/hiconvo/api/errors"
 	"github.com/hiconvo/api/models"
 )
 
-func extractUsers(ctx context.Context, owner models.User, users []interface{}) ([]models.User, []*datastore.Key, []string, error) {
+func (c *Config) extractUsers(ctx context.Context, owner models.User, users []interface{}) ([]models.User, []*datastore.Key, []string, error) {
 	op := errors.Op("handlers.extractUsers")
 	// Make sure users actually exist and remove both duplicate ids and
 	// the owner's id from users
@@ -84,7 +83,7 @@ func extractUsers(ctx context.Context, owner models.User, users []interface{}) (
 	// Now, get the user objects and save to a new slice of user structs.
 	// If this fails, then the input was not valid.
 	userStructs := make([]models.User, len(userKeys))
-	if err := db.DefaultClient.GetMulti(ctx, userKeys, userStructs); err != nil {
+	if err := c.DB.GetMulti(ctx, userKeys, userStructs); err != nil {
 		return []models.User{}, []*datastore.Key{}, []string{}, errors.E(op,
 			map[string]string{"users": "Invalid users"},
 			http.StatusBadRequest)
@@ -114,7 +113,7 @@ func createUserByEmail(ctx context.Context, client *models.Client, email string)
 	return u, nil
 }
 
-func createUsersByEmail(ctx context.Context, client *models.Client, emails []string) ([]models.User, []*datastore.Key, error) {
+func (c *Config) createUsersByEmail(ctx context.Context, client *models.Client, emails []string) ([]models.User, []*datastore.Key, error) {
 	op := errors.Op("handlers.createUsersByEmail")
 
 	var userStructs []models.User
@@ -138,7 +137,7 @@ func createUsersByEmail(ctx context.Context, client *models.Client, emails []str
 		}
 	}
 
-	keys, err := db.DefaultClient.PutMulti(ctx, usersToCommitKeys, usersToCommit)
+	keys, err := c.DB.PutMulti(ctx, usersToCommitKeys, usersToCommit)
 	if err != nil {
 		return []models.User{}, []*datastore.Key{}, errors.E(op, err)
 	}
@@ -156,13 +155,13 @@ func createUsersByEmail(ctx context.Context, client *models.Client, emails []str
 	return userStructs, userKeys, nil
 }
 
-func extractAndCreateUsers(ctx context.Context, client *models.Client, ou models.User, users []interface{}) ([]*models.User, error) {
-	userStructs, _, emails, err := extractUsers(ctx, ou, users)
+func (c *Config) extractAndCreateUsers(ctx context.Context, client *models.Client, ou models.User, users []interface{}) ([]*models.User, error) {
+	userStructs, _, emails, err := c.extractUsers(ctx, ou, users)
 	if err != nil {
 		return []*models.User{}, err
 	}
 
-	newUsers, _, err := createUsersByEmail(ctx, client, emails)
+	newUsers, _, err := c.createUsersByEmail(ctx, client, emails)
 	if err != nil {
 		return []*models.User{}, err
 	}

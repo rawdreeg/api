@@ -6,13 +6,22 @@ import (
 	"github.com/gorilla/mux"
 
 	"github.com/hiconvo/api/db"
+	"github.com/hiconvo/api/mail"
 	"github.com/hiconvo/api/middleware"
 	"github.com/hiconvo/api/models"
+	"github.com/hiconvo/api/notifications"
+	"github.com/hiconvo/api/storage"
 	"github.com/hiconvo/api/utils/bjson"
+	"github.com/hiconvo/api/utils/places"
 )
 
 type Config struct {
-	ModelsClient *models.Client
+	DB            db.Client
+	ModelsClient  *models.Client
+	PlacesClient  places.Client
+	NtfClient     notifications.Client
+	StorageClient *storage.Client
+	MailClient    mail.Client
 }
 
 // New mounts all of the application's endpoints.
@@ -55,7 +64,7 @@ func New(c *Config) http.Handler {
 	////
 
 	txSubrouter := jsonSubrouter.NewRoute().Subrouter()
-	txSubrouter.Use(db.WithTransaction)
+	txSubrouter.Use(db.WithTransaction(c.DB))
 	txSubrouter.HandleFunc("/events/rsvps", c.MagicRSVP).Methods("POST")
 	// Events
 	txEventSubrouter := txSubrouter.NewRoute().Subrouter()

@@ -2,29 +2,13 @@ package notifications
 
 import (
 	"fmt"
+	"log"
 
 	"cloud.google.com/go/datastore"
 	"gopkg.in/GetStream/stream-go2.v1"
 
 	"github.com/hiconvo/api/errors"
-	"github.com/hiconvo/api/utils/secrets"
 )
-
-var DefaultClient Client
-
-func init() {
-	streamKey := secrets.Get("STREAM_API_KEY", "streamKey")
-	streamSecret := secrets.Get("STREAM_API_SECRET", "streamSecret")
-	DefaultClient = NewClient(streamKey, streamSecret, "us-east")
-}
-
-func Put(n Notification) error {
-	return DefaultClient.Put(n)
-}
-
-func GenerateToken(userID string) string {
-	return DefaultClient.GenerateToken(userID)
-}
 
 type (
 	verb   string
@@ -32,24 +16,16 @@ type (
 )
 
 const (
-	// NewEvent is a notification type that means a new event was created.
-	NewEvent verb = "NewEvent"
-	// UpdateEvent is a notification type that means an event was updated.
+	NewEvent    verb = "NewEvent"
 	UpdateEvent verb = "UpdateEvent"
-	// DeleteEvent is a notification type that means an event was deleted.
 	DeleteEvent verb = "DeleteEvent"
-	// AddRSVP is a notification type that means someone RSVP'd to an event.
-	AddRSVP verb = "AddRSVP"
-	// RemoveRSVP is a notification type that means someone removed their RSVP from an event.
-	RemoveRSVP verb = "RemoveRSVP"
+	AddRSVP     verb = "AddRSVP"
+	RemoveRSVP  verb = "RemoveRSVP"
 
-	// NewMessage is a notification type that means a new message was sent.
 	NewMessage verb = "NewMessage"
 
-	// Thread is a notification target that associates the notification with a thread object.
 	Thread target = "thread"
-	// Event is a notification target that associates the notification with an event object.
-	Event target = "event"
+	Event  target = "event"
 )
 
 // A Notification contains the information needed to dispatch a notification.
@@ -117,7 +93,7 @@ func (c *clientImpl) Put(n Notification) error {
 	return nil
 }
 
-// GenerateToken generates a token for use on the frontend to retireve notifications.
+// GenerateToken generates a token for use on the frontend to retrieve notifications.
 func (c *clientImpl) GenerateToken(userID string) string {
 	feed := c.client.NotificationFeed("notification", userID)
 	return feed.RealtimeToken(true)
@@ -126,6 +102,7 @@ func (c *clientImpl) GenerateToken(userID string) string {
 // FilterKey is a convenience function that filters a specific key from a slice.
 func FilterKey(keys []*datastore.Key, toFilter *datastore.Key) []*datastore.Key {
 	var filtered []*datastore.Key
+
 	for i := range keys {
 		if keys[i].Equal(toFilter) {
 			continue
@@ -135,4 +112,21 @@ func FilterKey(keys []*datastore.Key, toFilter *datastore.Key) []*datastore.Key 
 	}
 
 	return filtered
+}
+
+type logger struct{}
+
+func NewLogger() Client {
+	log.Print("notification.NewLogger: USING NOTIFICATION LOGGER FOR LOCAL DEVELOPMENT")
+	return &logger{}
+}
+
+func (l *logger) Put(n Notification) error {
+	log.Printf("notification.Put(Actor=%s, Verb=%s, Target=%s, TargetID=%s)",
+		n.Actor, n.Verb, string(n.Target), n.TargetID)
+	return nil
+}
+
+func (l *logger) GenerateToken(userID string) string {
+	return "nullToken"
 }

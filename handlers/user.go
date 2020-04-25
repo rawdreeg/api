@@ -11,7 +11,6 @@ import (
 	"github.com/hiconvo/api/log"
 	"github.com/hiconvo/api/middleware"
 	"github.com/hiconvo/api/models"
-	"github.com/hiconvo/api/storage"
 	"github.com/hiconvo/api/utils/bjson"
 	"github.com/hiconvo/api/utils/magic"
 	"github.com/hiconvo/api/utils/oauth"
@@ -262,7 +261,7 @@ func (c *Config) OAuth(w http.ResponseWriter, r *http.Request) {
 		}
 
 		if u.Avatar == "" {
-			avatarURI, err := storage.DefaultClient.PutAvatarFromURL(ctx, oauthPayload.TempAvatar)
+			avatarURI, err := c.StorageClient.PutAvatarFromURL(ctx, oauthPayload.TempAvatar)
 			if err != nil {
 				// Print error but keep going. User might not have a profile pic.
 				log.Alarm(err)
@@ -294,7 +293,7 @@ func (c *Config) OAuth(w http.ResponseWriter, r *http.Request) {
 
 	// Finally at new user case. Cache the avatar from the Oauth payload and
 	// create a new account with the Oauth payload.
-	avatarURI, err := storage.DefaultClient.PutAvatarFromURL(ctx, oauthPayload.TempAvatar)
+	avatarURI, err := c.StorageClient.PutAvatarFromURL(ctx, oauthPayload.TempAvatar)
 	if err != nil {
 		// Print error but keep going. User might not have a profile pic.
 		log.Alarm(err)
@@ -696,13 +695,13 @@ func (c *Config) PutAvatar(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	avatarURL, err := storage.DefaultClient.PutAvatarFromBlob(
+	avatarURL, err := c.StorageClient.PutAvatarFromBlob(
 		ctx,
 		payload.Blob,
 		int(payload.Size),
 		int(payload.X),
 		int(payload.Y),
-		storage.DefaultClient.GetKeyFromAvatarURL(u.Avatar))
+		c.StorageClient.GetKeyFromAvatarURL(u.Avatar))
 	if err != nil {
 		bjson.HandleError(w, err)
 		return

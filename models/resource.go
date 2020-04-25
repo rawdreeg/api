@@ -10,36 +10,44 @@ import (
 	"github.com/hiconvo/api/notifications"
 	"github.com/hiconvo/api/queue"
 	"github.com/hiconvo/api/search"
-	"github.com/hiconvo/api/utils/secrets"
+	"github.com/hiconvo/api/storage"
 )
 
 type Client struct {
-	db     db.Client            `datastore:"-"`
-	ntf    notifications.Client `datastore:"-"`
-	search search.Client        `datastore:"-"`
-	mail   mail.Client          `datastore:"-"`
-	queue  queue.Client         `datastore:"-"`
+	db      db.Client            `datastore:"-"`
+	ntf     notifications.Client `datastore:"-"`
+	search  search.Client        `datastore:"-"`
+	mail    mail.Client          `datastore:"-"`
+	queue   queue.Client         `datastore:"-"`
+	storage *storage.Client      `datastore:"-"`
 
 	supportUser    *User
 	welcomeMessage string
 }
 
-func NewClient(dc db.Client, nc notifications.Client, sc search.Client, mc mail.Client, qc queue.Client) *Client {
+func NewClient(
+	dc db.Client,
+	nc notifications.Client,
+	sc search.Client,
+	mc mail.Client,
+	qc queue.Client,
+	sto *storage.Client,
+	supportPassword string) *Client {
 	c := &Client{
-		db:     dc,
-		ntf:    nc,
-		search: sc,
-		mail:   mc,
-		queue:  qc,
+		db:      dc,
+		ntf:     nc,
+		search:  sc,
+		mail:    mc,
+		queue:   qc,
+		storage: sto,
 	}
-	c.initSupportUser()
+	c.initSupportUser(supportPassword)
 	c.welcomeMessage = readStringFromFile("welcome.md")
 	return c
 }
 
-func (c *Client) initSupportUser() {
+func (c *Client) initSupportUser(supportPassword string) {
 	op := errors.Op("models.Client.initSupportUser")
-	supportPassword := secrets.Get("SUPPORT_PASSWORD", "support")
 	ctx := context.Background()
 
 	u, found, err := c.GetUserByEmail(ctx, "support@convo.events")

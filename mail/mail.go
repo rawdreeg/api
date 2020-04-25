@@ -9,7 +9,6 @@ import (
 
 	"github.com/hiconvo/api/errors"
 	"github.com/hiconvo/api/log"
-	"github.com/hiconvo/api/utils/secrets"
 )
 
 // EmailMessage is a sendable email message. All of its fields
@@ -24,20 +23,6 @@ type EmailMessage struct {
 	HTMLContent   string
 	TextContent   string
 	ICSAttachment string
-}
-
-var DefaultClient Client
-
-func init() {
-	if apiKey := secrets.Get("SENDGRID_API_KEY", ""); apiKey == "" {
-		DefaultClient = NewLogger()
-	} else {
-		DefaultClient = NewClient(apiKey)
-	}
-}
-
-func Send(e EmailMessage) error {
-	return DefaultClient.Send(e)
 }
 
 type Client interface {

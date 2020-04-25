@@ -32,16 +32,9 @@ import (
 
 	"github.com/hiconvo/api/errors"
 	"github.com/hiconvo/api/log"
-	"github.com/hiconvo/api/utils/secrets"
 )
 
 const _nullKey string = "null-key"
-
-var DefaultClient *Client
-
-func init() {
-	DefaultClient = NewClient(secrets.Get("AVATAR_BUCKET_NAME", ""), secrets.Get("PHOTO_BUCKET_NAME", ""))
-}
 
 type Client struct {
 	avatarBucketName string

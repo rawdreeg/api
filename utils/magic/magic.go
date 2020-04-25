@@ -14,10 +14,9 @@ import (
 	"cloud.google.com/go/datastore"
 
 	"github.com/hiconvo/api/errors"
-	"github.com/hiconvo/api/utils/secrets"
 )
 
-var secret = secrets.Get("APP_SECRET", "")
+var secret = "TODO"
 
 func NewLink(k *datastore.Key, salt, action string) string {
 	// Get time and convert to epoc string

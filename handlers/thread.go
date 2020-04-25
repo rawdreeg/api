@@ -49,7 +49,7 @@ func (c *Config) CreateThread(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	users, err := extractAndCreateUsers(ctx, c.ModelsClient, ou, payload.Users)
+	users, err := c.extractAndCreateUsers(ctx, c.ModelsClient, ou, payload.Users)
 	if err != nil {
 		bjson.HandleError(w, err)
 		return

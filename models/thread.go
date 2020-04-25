@@ -139,7 +139,7 @@ func (t *Thread) Commit(ctx context.Context) error {
 		t.CreatedAt = time.Now()
 	}
 
-	key, err := db.DefaultClient.Put(ctx, t.Key, t)
+	key, err := t.client.db.Put(ctx, t.Key, t)
 	if err != nil {
 		return errors.E(errors.Op("thread.Commit"), err)
 	}
@@ -258,7 +258,7 @@ func (t *Thread) Send(ctx context.Context) error {
 		return err
 	}
 
-	return sendThread(t, messages)
+	return t.client.sendThread(t, messages)
 }
 
 func (t *Thread) SendAsync(ctx context.Context) error {

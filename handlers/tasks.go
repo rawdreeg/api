@@ -7,7 +7,6 @@ import (
 	"cloud.google.com/go/datastore"
 	"google.golang.org/api/iterator"
 
-	"github.com/hiconvo/api/db"
 	"github.com/hiconvo/api/errors"
 	"github.com/hiconvo/api/log"
 	"github.com/hiconvo/api/models"
@@ -27,7 +26,7 @@ func (c *Config) CreateDigest(w http.ResponseWriter, r *http.Request) {
 
 	ctx := r.Context()
 	query := datastore.NewQuery("User")
-	iter := db.DefaultClient.Run(ctx, query)
+	iter := c.DB.Run(ctx, query)
 
 	for {
 		var user models.User

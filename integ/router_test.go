@@ -18,9 +18,11 @@ import (
 	"github.com/hiconvo/api/notifications"
 	"github.com/hiconvo/api/queue"
 	"github.com/hiconvo/api/search"
+	"github.com/hiconvo/api/storage"
 	og "github.com/hiconvo/api/utils/opengraph"
 	"github.com/hiconvo/api/utils/places"
 	"github.com/hiconvo/api/utils/random"
+	"github.com/hiconvo/api/utils/secrets"
 	"github.com/hiconvo/api/utils/thelpers"
 )
 
@@ -33,22 +35,38 @@ var (
 
 func TestMain(m *testing.M) {
 	os.Chdir("..")
+
 	ctx := thelpers.CreateTestContext()
 	client := thelpers.CreateTestDatastoreClient(ctx)
 	thelpers.ClearDatastore(ctx, client)
 
-	places.DefaultClient = places.NewLogger()
+	dbClient := db.NewClient(ctx, "local-convo-api")
+	secretsClient := secrets.NewClient(ctx, dbClient)
+	storageClient := storage.NewClient(
+		secretsClient.Get("AVATAR_BUCKET_NAME", ""),
+		secretsClient.Get("PHOTO_BUCKET_NAME", ""),
+	)
+	ntfClient := notifications.NewLogger()
+	mailClient := mail.NewLogger()
 
 	// Set globals to be used by tests below
 	tc = ctx
 	modelsClient = models.NewClient(
-		db.DefaultClient,
-		notifications.DefaultClient,
-		search.DefaultClient,
-		mail.DefaultClient,
-		queue.DefaultClient)
+		dbClient,
+		ntfClient,
+		search.NewClient(secretsClient.Get("ELASTICSEARCH_HOST", "elasticsearch")),
+		mailClient,
+		queue.NewLogger(),
+		storageClient,
+		"supportPassword",
+	)
 	th = handlers.New(&handlers.Config{
-		ModelsClient: modelsClient,
+		ModelsClient:  modelsClient,
+		DB:            dbClient,
+		PlacesClient:  places.NewLogger(),
+		NtfClient:     ntfClient,
+		StorageClient: storageClient,
+		MailClient:    mailClient,
 	})
 	tclient = client
 

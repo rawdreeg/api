@@ -9,10 +9,8 @@ import (
 
 	"cloud.google.com/go/datastore"
 
-	"github.com/hiconvo/api/db"
 	"github.com/hiconvo/api/errors"
 	"github.com/hiconvo/api/log"
-	"github.com/hiconvo/api/storage"
 	og "github.com/hiconvo/api/utils/opengraph"
 )
 
@@ -56,7 +54,7 @@ func (c *Client) NewThreadMessage(u *User, t *Thread, body, photoKey string, lin
 
 	if photoKey != "" {
 		message.PhotoKeys = []string{photoKey}
-		message.Photos = []string{storage.DefaultClient.GetPhotoURLFromKey(photoKey)}
+		message.Photos = []string{c.storage.GetPhotoURLFromKey(photoKey)}
 	}
 
 	if t.Preview == nil {
@@ -88,7 +86,7 @@ func (c *Client) NewEventMessage(u *User, e *Event, body, photoKey string) (Mess
 
 	if photoKey != "" {
 		message.PhotoKeys = []string{photoKey}
-		message.Photos = []string{storage.DefaultClient.GetPhotoURLFromKey(photoKey)}
+		message.Photos = []string{c.storage.GetPhotoURLFromKey(photoKey)}
 	}
 
 	ClearReads(e)
@@ -134,22 +132,6 @@ func (m *Message) Load(ps []datastore.Property) error {
 			m.ParentKey = k
 			m.ParentID = k.Encode()
 		}
-
-		// Convert photoKeys into full URLs
-		if p.Name == "PhotoKeys" {
-			photoKeys, ok := p.Value.([]interface{})
-			if ok {
-				photos := make([]string, len(photoKeys))
-				for i := range photoKeys {
-					photoKey, ok := photoKeys[i].(string)
-					if ok {
-						photos[i] = storage.DefaultClient.GetPhotoURLFromKey(photoKey)
-					}
-				}
-
-				m.Photos = photos
-			}
-		}
 	}
 
 	return nil
@@ -185,6 +167,18 @@ func (m *Message) HasPhotoKey(key string) bool {
 	return false
 }
 
+func (m *Message) setPhotoURLs() {
+	if len(m.PhotoKeys) > 0 {
+		photos := make([]string, len(m.PhotoKeys))
+
+		for i := range m.PhotoKeys {
+			photos[i] = m.client.storage.GetPhotoURLFromKey(m.PhotoKeys[i])
+		}
+
+		m.Photos = photos
+	}
+}
+
 // DeletePhoto deletes the given photo by key. In order to handle
 // concurrent requests, or cases where photo deletion succeeds but
 // updating the message fails, etc., it does not return an if the
@@ -207,7 +201,7 @@ func (m *Message) DeletePhoto(ctx context.Context, key string) error {
 			}
 		}
 
-		if err := storage.DefaultClient.DeletePhoto(ctx, key); err != nil {
+		if err := m.client.storage.DeletePhoto(ctx, key); err != nil {
 			log.Alarm(errors.E(errors.Op("models.DeletePhoto"), err))
 		}
 	}
@@ -263,6 +257,7 @@ func (c *Client) GetMessagesByKey(ctx context.Context, k *datastore.Key) ([]*Mes
 	for i := range messages {
 		messages[i].client = c
 		messages[i].User = MapUserToUserPartial(users[i])
+		messages[i].setPhotoURLs()
 	}
 
 	// TODO: Get Query#Order to work above.
@@ -276,12 +271,13 @@ func (c *Client) GetMessagesByKey(ctx context.Context, k *datastore.Key) ([]*Mes
 func (c *Client) GetUnhydratedMessagesByUser(ctx context.Context, u *User) ([]*Message, error) {
 	var messages []*Message
 	q := datastore.NewQuery("Message").Filter("UserKey =", u.Key)
-	if _, err := db.DefaultClient.GetAll(ctx, q, &messages); err != nil {
+	if _, err := c.db.GetAll(ctx, q, &messages); err != nil {
 		return messages, err
 	}
 
 	for i := range messages {
 		messages[i].client = c
+		messages[i].setPhotoURLs()
 	}
 
 	return messages, nil
@@ -302,6 +298,7 @@ func (c *Client) GetMessageByID(ctx context.Context, id string) (Message, error)
 	}
 
 	message.client = c
+	message.setPhotoURLs()
 
 	return message, nil
 }

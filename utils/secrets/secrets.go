@@ -10,16 +10,6 @@ import (
 	"github.com/hiconvo/api/log"
 )
 
-var DefaultClient Client
-
-func init() {
-	DefaultClient = NewClient(context.Background(), db.DefaultClient)
-}
-
-func Get(id, fallback string) string {
-	return DefaultClient.Get(id, fallback)
-}
-
 type Client interface {
 	Get(id, fallback string) string
 }

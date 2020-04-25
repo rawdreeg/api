@@ -367,7 +367,7 @@ func (e *Event) GetEmail() string {
 }
 
 func (e *Event) SendInvites(ctx context.Context) error {
-	return sendEvent(e, false)
+	return e.client.sendEvent(e, false)
 }
 
 func (e *Event) SendInvitesAsync(ctx context.Context) error {
@@ -379,7 +379,7 @@ func (e *Event) SendInvitesAsync(ctx context.Context) error {
 }
 
 func (e *Event) SendUpdatedInvites(ctx context.Context) error {
-	return sendEvent(e, true)
+	return e.client.sendEvent(e, true)
 }
 
 func (e *Event) SendUpdatedInvitesAsync(ctx context.Context) error {
@@ -391,11 +391,11 @@ func (e *Event) SendUpdatedInvitesAsync(ctx context.Context) error {
 }
 
 func (e *Event) SendInviteToUser(ctx context.Context, user *User) error {
-	return sendEventInvitation(e, user)
+	return e.client.sendEventInvitation(e, user)
 }
 
 func (e *Event) SendCancellation(ctx context.Context, message string) error {
-	return sendCancellation(e, message)
+	return e.client.sendCancellation(e, message)
 }
 
 func (e *Event) IsInFuture() bool {

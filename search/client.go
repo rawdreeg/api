@@ -7,14 +7,7 @@ import (
 	"github.com/olivere/elastic/v7"
 
 	"github.com/hiconvo/api/log"
-	"github.com/hiconvo/api/utils/secrets"
 )
-
-var DefaultClient Client
-
-func init() {
-	DefaultClient = NewClient(secrets.Get("ELASTICSEARCH_HOST", "elasticsearch"))
-}
 
 type Client interface {
 	Update() *elastic.UpdateService

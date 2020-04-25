@@ -7,10 +7,9 @@ import (
 	"net/http"
 
 	"github.com/hiconvo/api/errors"
-	"github.com/hiconvo/api/utils/secrets"
 )
 
-var googleAud string = secrets.Get("GOOGLE_OAUTH_KEY", "")
+var googleAud string = ""
 
 type UserPayload struct {
 	Provider string `validate:"regexp=^(google|facebook)$"`
@@ -29,12 +28,10 @@ type ProviderPayload struct {
 // Verify both verifies the fiven oauth token and retrieves needed info about
 // the user.
 func Verify(ctx context.Context, payload UserPayload) (ProviderPayload, error) {
-	// FIXME: If a user changes her email via an oauth party, we will not know
-	// about it. Need to monitor for bounced emails and show message on web ui
-	// to prompt user to update email in that case.
 	if payload.Provider == "google" {
 		return verifyGoogleToken(ctx, payload)
 	}
+
 	return verifyFacebookToken(ctx, payload)
 }
 

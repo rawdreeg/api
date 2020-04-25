@@ -3,21 +3,15 @@ package places
 import (
 	"context"
 	"net/http"
-	"os"
 	"strings"
 
 	"googlemaps.github.io/maps"
 
 	"github.com/hiconvo/api/errors"
 	"github.com/hiconvo/api/log"
-	"github.com/hiconvo/api/utils/secrets"
 )
 
-var (
-	_fields []maps.PlaceDetailsFieldMask
-
-	DefaultClient Client
-)
+var _fields []maps.PlaceDetailsFieldMask
 
 func init() {
 	fieldName, err := maps.ParsePlaceDetailsFieldMask("name")
@@ -48,16 +42,6 @@ func init() {
 		fieldGeometry,
 		fieldUTCOffset,
 	}
-
-	if projectID := os.Getenv("GOOGLE_CLOUD_PROJECT"); projectID == "local-convo-api" || projectID == "" {
-		DefaultClient = NewLogger()
-	} else {
-		DefaultClient = NewClient(secrets.Get("GOOGLE_MAPS_API_KEY", ""))
-	}
-}
-
-func Resolve(ctx context.Context, placeID string) (Place, error) {
-	return DefaultClient.Resolve(ctx, placeID)
 }
 
 type Place struct {

@@ -42,7 +42,7 @@ func (c *Config) Inbound(w http.ResponseWriter, r *http.Request) {
 	// Get the thread
 	thread, err := c.ModelsClient.GetThreadByInt64ID(ctx, threadID)
 	if err != nil {
-		sendTryAgainEmail(from)
+		c.sendTryAgainEmail(from)
 		handleClientErrorResponse(w, err)
 		return
 	}
@@ -50,7 +50,7 @@ func (c *Config) Inbound(w http.ResponseWriter, r *http.Request) {
 	// Get user from from address
 	user, found, err := c.ModelsClient.GetUserByEmail(ctx, from)
 	if !found {
-		sendErrorEmail(from)
+		c.sendErrorEmail(from)
 		handleClientErrorResponse(w, errors.New("Email not recognized"))
 		return
 	} else if err != nil {
@@ -60,7 +60,7 @@ func (c *Config) Inbound(w http.ResponseWriter, r *http.Request) {
 
 	// Verify that the user is a particiapant of the thread
 	if !(thread.OwnerIs(&user) || thread.HasUser(&user)) {
-		sendErrorEmail(user.Email)
+		c.sendErrorEmail(user.Email)
 		handleClientErrorResponse(w, errors.New("Permission denied"))
 		return
 	}
@@ -122,8 +122,8 @@ func handleServerErrorResponse(w http.ResponseWriter, err error) {
 	w.WriteHeader(http.StatusInternalServerError)
 }
 
-func sendErrorEmail(email string) {
-	err := mail.Send(mail.EmailMessage{
+func (c *Config) sendErrorEmail(email string) {
+	err := c.MailClient.Send(mail.EmailMessage{
 		FromName:    "Convo",
 		FromEmail:   "support@mail.convo.events",
 		ToName:      "",
@@ -138,8 +138,8 @@ func sendErrorEmail(email string) {
 	}
 }
 
-func sendTryAgainEmail(email string) {
-	err := mail.Send(mail.EmailMessage{
+func (c *Config) sendTryAgainEmail(email string) {
+	err := c.MailClient.Send(mail.EmailMessage{
 		FromName:    "Convo",
 		FromEmail:   "support@mail.convo.events",
 		ToName:      "",

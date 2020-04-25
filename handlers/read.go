@@ -6,7 +6,6 @@ import (
 
 	"cloud.google.com/go/datastore"
 
-	"github.com/hiconvo/api/db"
 	"github.com/hiconvo/api/errors"
 	"github.com/hiconvo/api/middleware"
 	"github.com/hiconvo/api/models"
@@ -88,7 +87,7 @@ func (c *Config) markMessagesAsRead(
 		messageKeys[i] = messages[i].Key
 	}
 
-	if _, err := db.DefaultClient.PutMulti(ctx, messageKeys, messages); err != nil {
+	if _, err := c.DB.PutMulti(ctx, messageKeys, messages); err != nil {
 		return err
 	}
 

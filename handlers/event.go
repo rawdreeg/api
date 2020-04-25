@@ -17,7 +17,6 @@ import (
 	notif "github.com/hiconvo/api/notifications"
 	"github.com/hiconvo/api/utils/bjson"
 	"github.com/hiconvo/api/utils/magic"
-	"github.com/hiconvo/api/utils/places"
 	"github.com/hiconvo/api/utils/validate"
 )
 
@@ -71,21 +70,21 @@ func (c *Config) CreateEvent(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	place, err := places.Resolve(ctx, payload.PlaceID)
+	place, err := c.PlacesClient.Resolve(ctx, payload.PlaceID)
 	if err != nil {
 		bjson.HandleError(w, err)
 		return
 	}
 
 	// Handle users
-	users, err := extractAndCreateUsers(ctx, c.ModelsClient, ou, payload.Users)
+	users, err := c.extractAndCreateUsers(ctx, c.ModelsClient, ou, payload.Users)
 	if err != nil {
 		bjson.HandleError(w, err)
 		return
 	}
 
 	// Same thing for hosts
-	hosts, err := extractAndCreateUsers(ctx, c.ModelsClient, ou, payload.Hosts)
+	hosts, err := c.extractAndCreateUsers(ctx, c.ModelsClient, ou, payload.Hosts)
 	if err != nil {
 		bjson.HandleError(w, err)
 		return
@@ -200,7 +199,7 @@ func (c *Config) UpdateEvent(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	hosts, err := extractAndCreateUsers(ctx, c.ModelsClient, u, payload.Hosts)
+	hosts, err := c.extractAndCreateUsers(ctx, c.ModelsClient, u, payload.Hosts)
 	if err != nil {
 		bjson.HandleError(w, err)
 		return
@@ -238,7 +237,7 @@ func (c *Config) UpdateEvent(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if payload.PlaceID != "" && payload.PlaceID != event.PlaceID {
-		place, err := places.Resolve(ctx, payload.PlaceID)
+		place, err := c.PlacesClient.Resolve(ctx, payload.PlaceID)
 		if err != nil {
 			bjson.HandleError(w, err)
 			return
@@ -268,7 +267,7 @@ func (c *Config) UpdateEvent(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	if err := notif.Put(notif.Notification{
+	if err := c.NtfClient.Put(notif.Notification{
 		UserKeys:   notif.FilterKey(event.UserKeys, u.Key),
 		Actor:      u.FullName,
 		Verb:       notif.UpdateEvent,
@@ -323,7 +322,7 @@ func (c *Config) DeleteEvent(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		if err := notif.Put(notif.Notification{
+		if err := c.NtfClient.Put(notif.Notification{
 			UserKeys:   notif.FilterKey(event.UserKeys, u.Key),
 			Actor:      u.FullName,
 			Verb:       notif.DeleteEvent,
@@ -477,7 +476,7 @@ func (c *Config) AddRSVPToEvent(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := notif.Put(notif.Notification{
+	if err := c.NtfClient.Put(notif.Notification{
 		UserKeys:   []*datastore.Key{event.OwnerKey},
 		Actor:      u.FullName,
 		Verb:       notif.AddRSVP,
@@ -517,7 +516,7 @@ func (c *Config) RemoveRSVPFromEvent(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := notif.Put(notif.Notification{
+	if err := c.NtfClient.Put(notif.Notification{
 		UserKeys:   []*datastore.Key{event.OwnerKey},
 		Actor:      u.FullName,
 		Verb:       notif.RemoveRSVP,
@@ -601,7 +600,7 @@ func (c *Config) MagicRSVP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := notif.Put(notif.Notification{
+	if err := c.NtfClient.Put(notif.Notification{
 		UserKeys:   []*datastore.Key{e.OwnerKey},
 		Actor:      u.FullName,
 		Verb:       notif.AddRSVP,
@@ -670,7 +669,7 @@ func (c *Config) MagicInvite(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := notif.Put(notif.Notification{
+	if err := c.NtfClient.Put(notif.Notification{
 		UserKeys:   []*datastore.Key{e.OwnerKey},
 		Actor:      u.FullName,
 		Verb:       notif.AddRSVP,

@@ -3,16 +3,9 @@ package db
 import (
 	"context"
 	"fmt"
-	"os"
 
 	"cloud.google.com/go/datastore"
 )
-
-var DefaultClient Client
-
-func init() {
-	DefaultClient = NewClient(context.Background(), os.Getenv("GOOGLE_CLOUD_PROJECT"))
-}
 
 type Client interface {
 	Count(ctx context.Context, q *datastore.Query) (n int, err error)

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"net/http"
@@ -15,20 +16,44 @@ import (
 	"github.com/hiconvo/api/notifications"
 	"github.com/hiconvo/api/queue"
 	"github.com/hiconvo/api/search"
+	"github.com/hiconvo/api/storage"
+	"github.com/hiconvo/api/utils/places"
 	"github.com/hiconvo/api/utils/secrets"
 )
 
 func main() {
-	raven.SetDSN(secrets.Get("SENTRY_DSN", ""))
+	dbClient := db.NewClient(context.Background(), os.Getenv("GOOGLE_CLOUD_PROJECT"))
+	secretsClient := secrets.NewClient(context.Background(), dbClient)
+
+	raven.SetDSN(secretsClient.Get("SENTRY_DSN", ""))
 	raven.SetRelease(os.Getenv("GAE_VERSION"))
+
+	ntfClient := notifications.NewClient(
+		secretsClient.Get("STREAM_API_KEY", "streamKey"),
+		secretsClient.Get("STREAM_API_SECRET", "streamSecret"),
+		"us-east",
+	)
+	storageClient := storage.NewClient(
+		secretsClient.Get("AVATAR_BUCKET_NAME", ""),
+		secretsClient.Get("PHOTO_BUCKET_NAME", ""),
+	)
+	mailClient := mail.NewClient(secretsClient.Get("SENDGRID_API_KEY", ""))
 
 	http.Handle("/", handlers.New(&handlers.Config{
 		ModelsClient: models.NewClient(
-			db.DefaultClient,
-			notifications.DefaultClient,
-			search.DefaultClient,
-			mail.DefaultClient,
-			queue.DefaultClient),
+			dbClient,
+			ntfClient,
+			search.NewClient(secretsClient.Get("ELASTICSEARCH_HOST", "elasticsearch")),
+			mailClient,
+			queue.DefaultClient,
+			storageClient,
+			secretsClient.Get("SUPPORT_PASSWORD", ""),
+		),
+		DB:            dbClient,
+		PlacesClient:  places.NewClient(secretsClient.Get("GOOGLE_MAPS_API_KEY", "")),
+		NtfClient:     ntfClient,
+		StorageClient: storageClient,
+		MailClient:    mailClient,
 	}))
 
 	port := os.Getenv("PORT")

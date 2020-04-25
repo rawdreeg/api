@@ -16,9 +16,7 @@ import (
 	"github.com/hiconvo/api/db"
 	"github.com/hiconvo/api/errors"
 	"github.com/hiconvo/api/log"
-	notif "github.com/hiconvo/api/notifications"
 	"github.com/hiconvo/api/queue"
-	"github.com/hiconvo/api/search"
 	"github.com/hiconvo/api/utils/magic"
 	og "github.com/hiconvo/api/utils/opengraph"
 	"github.com/hiconvo/api/utils/random"
@@ -132,11 +130,6 @@ func (u *User) LoadKey(k *datastore.Key) error {
 	// Add URL safe key
 	u.ID = k.Encode()
 
-	// Generate the streamer token if not already present
-	if u.RealtimeToken == "" {
-		u.RealtimeToken = notif.GenerateToken(u.ID)
-	}
-
 	return nil
 }
 
@@ -187,7 +180,7 @@ func (u *User) Commit(ctx context.Context) error {
 
 	// We have to do this after the user has been saved because we need the
 	// ID, which isn't available until the user is in the database
-	u.RealtimeToken = notif.GenerateToken(u.ID)
+	u.RealtimeToken = u.client.ntf.GenerateToken(u.ID)
 
 	u.DeriveProperties()
 	u.CreateOrUpdateSearchIndex(ctx)
@@ -267,21 +260,21 @@ func (u *User) IsRegistered() bool {
 
 func (u *User) SendPasswordResetEmail() error {
 	magicLink := magic.NewLink(u.Key, u.PasswordDigest, "reset")
-	return sendPasswordResetEmail(u, magicLink)
+	return u.client.sendPasswordResetEmail(u, magicLink)
 }
 
 func (u *User) SendVerifyEmail(email string) error {
 	femail := strings.ToLower(email)
 	salt := femail + strconv.FormatBool(u.HasEmail(femail))
 	magicLink := magic.NewLink(u.Key, salt, "verify/"+femail)
-	return sendVerifyEmail(u, email, magicLink)
+	return u.client.sendVerifyEmail(u, email, magicLink)
 }
 
 func (u *User) SendMergeAccountsEmail(emailToMerge string) error {
 	femail := strings.ToLower(emailToMerge)
 	salt := femail + strconv.FormatBool(u.HasEmail(femail))
 	magicLink := magic.NewLink(u.Key, salt, "verify/"+femail)
-	return sendMergeAccountsEmail(u, femail, magicLink)
+	return u.client.sendMergeAccountsEmail(u, femail, magicLink)
 }
 
 func (u *User) AddContact(c *User) error {
@@ -471,11 +464,11 @@ func (u *User) SendDigest(ctx context.Context) error {
 	}
 
 	if len(digestList) > 0 || len(upcoming) > 0 {
-		if err := sendDigest(digestList, upcoming, u); err != nil {
+		if err := u.client.sendDigest(digestList, upcoming, u); err != nil {
 			return err
 		}
 
-		if err := MarkDigestedMessagesAsRead(ctx, digestList, u); err != nil {
+		if err := u.client.MarkDigestedMessagesAsRead(ctx, digestList, u); err != nil {
 			return err
 		}
 	}
@@ -541,7 +534,7 @@ func (u *User) MergeWith(ctx context.Context, oldUser *User) error {
 
 		// Remove the old user from search
 		if oldUser.IsRegistered() {
-			_, err = search.DefaultClient.Delete().
+			_, err = u.client.search.Delete().
 				Index("users").
 				Id(oldUser.ID).
 				Do(ctx)
@@ -702,6 +695,12 @@ func (c *Client) getUserByField(ctx context.Context, field, value string) (User,
 	if len(keys) == 1 {
 		user := users[0]
 		user.client = c
+
+		// Generate the streamer token if not already present
+		if user.RealtimeToken == "" && user.ID != "" {
+			user.RealtimeToken = user.client.ntf.GenerateToken(user.ID)
+		}
+
 		return user, true, nil
 	}
 

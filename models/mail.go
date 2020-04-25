@@ -22,7 +22,7 @@ var (
 	_tplStrMergeAccounts = readStringFromFile("merge-accounts.txt")
 )
 
-func sendPasswordResetEmail(u *User, magicLink string) error {
+func (c *Client) sendPasswordResetEmail(u *User, magicLink string) error {
 	plainText, html, err := template.RenderAdminEmail(template.AdminEmail{
 		Body:       _tplStrPasswordReset,
 		ButtonText: "Set password",
@@ -42,10 +42,10 @@ func sendPasswordResetEmail(u *User, magicLink string) error {
 		HTMLContent: html,
 	}
 
-	return mail.Send(email)
+	return c.mail.Send(email)
 }
 
-func sendVerifyEmail(u *User, emailAddress, magicLink string) error {
+func (c *Client) sendVerifyEmail(u *User, emailAddress, magicLink string) error {
 	plainText, html, err := template.RenderAdminEmail(template.AdminEmail{
 		Body:       _tplStrVerifyEmail,
 		ButtonText: "Verify",
@@ -65,10 +65,10 @@ func sendVerifyEmail(u *User, emailAddress, magicLink string) error {
 		HTMLContent: html,
 	}
 
-	return mail.Send(email)
+	return c.mail.Send(email)
 }
 
-func sendMergeAccountsEmail(u *User, emailToMerge, magicLink string) error {
+func (c *Client) sendMergeAccountsEmail(u *User, emailToMerge, magicLink string) error {
 	plainText, html, err := template.RenderAdminEmail(template.AdminEmail{
 		Body:       _tplStrMergeAccounts,
 		ButtonText: "Verify",
@@ -89,10 +89,10 @@ func sendMergeAccountsEmail(u *User, emailToMerge, magicLink string) error {
 		HTMLContent: html,
 	}
 
-	return mail.Send(email)
+	return c.mail.Send(email)
 }
 
-func sendThread(thread *Thread, messages []*Message) error {
+func (c *Client) sendThread(thread *Thread, messages []*Message) error {
 	if len(messages) == 0 {
 		return errors.E(errors.Op("models.sendThread"), errors.Str("no messages to send"))
 	}
@@ -153,7 +153,7 @@ func sendThread(thread *Thread, messages []*Message) error {
 			continue
 		}
 
-		if err := mail.Send(emailMessages[i]); err != nil {
+		if err := c.mail.Send(emailMessages[i]); err != nil {
 			log.Alarm(errors.Errorf("models.sendThread: %v", err))
 		}
 	}
@@ -161,7 +161,7 @@ func sendThread(thread *Thread, messages []*Message) error {
 	return nil
 }
 
-func sendEvent(event *Event, isUpdate bool) error {
+func (c *Client) sendEvent(event *Event, isUpdate bool) error {
 	var fmtStr string
 	if isUpdate {
 		fmtStr = "Updated invitation to %s"
@@ -211,7 +211,7 @@ func sendEvent(event *Event, isUpdate bool) error {
 			continue
 		}
 
-		if err := mail.Send(emailMessages[i]); err != nil {
+		if err := c.mail.Send(emailMessages[i]); err != nil {
 			log.Alarm(errors.Errorf("models.sendEvent: %v", err))
 		}
 	}
@@ -219,7 +219,7 @@ func sendEvent(event *Event, isUpdate bool) error {
 	return nil
 }
 
-func sendEventInvitation(event *Event, user *User) error {
+func (c *Client) sendEventInvitation(event *Event, user *User) error {
 	plainText, html, err := template.RenderEvent(template.Event{
 		Name:        event.Name,
 		Address:     event.Address,
@@ -248,10 +248,10 @@ func sendEventInvitation(event *Event, user *User) error {
 		ICSAttachment: event.GetICS(),
 	}
 
-	return mail.Send(email)
+	return c.mail.Send(email)
 }
 
-func sendCancellation(event *Event, message string) error {
+func (c *Client) sendCancellation(event *Event, message string) error {
 	// Loop through all participants and generate emails
 	emailMessages := make([]mail.EmailMessage, len(event.Users))
 	for i, curUser := range event.Users {
@@ -282,7 +282,7 @@ func sendCancellation(event *Event, message string) error {
 			continue
 		}
 
-		if err := mail.Send(emailMessages[i]); err != nil {
+		if err := c.mail.Send(emailMessages[i]); err != nil {
 			log.Alarm(errors.Errorf("models.sendCancellation: %v", err))
 		}
 	}
@@ -290,7 +290,7 @@ func sendCancellation(event *Event, message string) error {
 	return nil
 }
 
-func sendDigest(digestList []DigestItem, upcomingEvents []*Event, user *User) error {
+func (c *Client) sendDigest(digestList []DigestItem, upcomingEvents []*Event, user *User) error {
 	// Convert all the DigestItems into template.Threads with their messages
 	items := make([]template.Thread, len(digestList))
 	for i := range digestList {
@@ -342,7 +342,7 @@ func sendDigest(digestList []DigestItem, upcomingEvents []*Event, user *User) er
 		HTMLContent: html,
 	}
 
-	return mail.Send(email)
+	return c.mail.Send(email)
 }
 
 func getLastFive(messages []*Message) []*Message {

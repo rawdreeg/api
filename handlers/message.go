@@ -12,7 +12,6 @@ import (
 	"github.com/hiconvo/api/middleware"
 	"github.com/hiconvo/api/models"
 	notif "github.com/hiconvo/api/notifications"
-	"github.com/hiconvo/api/storage"
 	"github.com/hiconvo/api/utils/bjson"
 	og "github.com/hiconvo/api/utils/opengraph"
 	"github.com/hiconvo/api/utils/validate"
@@ -76,12 +75,12 @@ func (c *Config) AddMessageToThread(w http.ResponseWriter, r *http.Request) {
 	var photoKey string
 	var err error
 	if payload.Blob != "" {
-		photoURL, err := storage.DefaultClient.PutPhotoFromBlob(ctx, thread.ID, payload.Blob)
+		photoURL, err := c.StorageClient.PutPhotoFromBlob(ctx, thread.ID, payload.Blob)
 		if err != nil {
 			bjson.HandleError(w, errors.E(op, err))
 			return
 		}
-		photoKey = storage.DefaultClient.GetKeyFromPhotoURL(photoURL)
+		photoKey = c.StorageClient.GetKeyFromPhotoURL(photoURL)
 	}
 
 	messageBody := html.UnescapeString(payload.Body)
@@ -136,7 +135,7 @@ func (c *Config) AddMessageToThread(w http.ResponseWriter, r *http.Request) {
 		}
 	} else {
 		// Send a notification for all later responses
-		if err := notif.Put(notif.Notification{
+		if err := c.NtfClient.Put(notif.Notification{
 			UserKeys:   notif.FilterKey(thread.UserKeys, u.Key),
 			Actor:      u.FullName,
 			Verb:       notif.NewMessage,
@@ -267,12 +266,12 @@ func (c *Config) AddMessageToEvent(w http.ResponseWriter, r *http.Request) {
 	var photoKey string
 	var err error
 	if payload.Blob != "" {
-		photoURL, err := storage.DefaultClient.PutPhotoFromBlob(ctx, event.ID, payload.Blob)
+		photoURL, err := c.StorageClient.PutPhotoFromBlob(ctx, event.ID, payload.Blob)
 		if err != nil {
 			bjson.HandleError(w, errors.E(op, err))
 			return
 		}
-		photoKey = storage.DefaultClient.GetKeyFromPhotoURL(photoURL)
+		photoKey = c.StorageClient.GetKeyFromPhotoURL(photoURL)
 	}
 
 	message, err := c.ModelsClient.NewEventMessage(
@@ -295,7 +294,7 @@ func (c *Config) AddMessageToEvent(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := notif.Put(notif.Notification{
+	if err := c.NtfClient.Put(notif.Notification{
 		UserKeys:   notif.FilterKey(event.UserKeys, u.Key),
 		Actor:      u.FullName,
 		Verb:       notif.NewMessage,
@@ -382,7 +381,7 @@ func (c *Config) DeletePhotoFromMessage(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	key := storage.DefaultClient.GetKeyFromPhotoURL(payload.Key)
+	key := c.StorageClient.GetKeyFromPhotoURL(payload.Key)
 
 	if !m.HasPhotoKey(key) {
 		bjson.HandleError(w, errors.E(op, errors.Str("no photo in message"), http.StatusBadRequest))

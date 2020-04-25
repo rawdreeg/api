@@ -4,8 +4,6 @@ import (
 	"context"
 
 	"cloud.google.com/go/datastore"
-
-	"github.com/hiconvo/api/db"
 )
 
 type DigestItem struct {
@@ -68,7 +66,7 @@ func (c *Client) GenerateDigestItem(ctx context.Context, d Digestable, u *User) 
 	return DigestItem{}, &DigestError{}
 }
 
-func MarkDigestedMessagesAsRead(ctx context.Context, digestList []DigestItem, user *User) error {
+func (c *Client) MarkDigestedMessagesAsRead(ctx context.Context, digestList []DigestItem, user *User) error {
 	var messages []*Message
 	var keys []*datastore.Key
 	for i := range digestList {
@@ -79,7 +77,7 @@ func MarkDigestedMessagesAsRead(ctx context.Context, digestList []DigestItem, us
 		}
 	}
 
-	_, err := db.DefaultClient.PutMulti(ctx, keys, messages)
+	_, err := c.db.PutMulti(ctx, keys, messages)
 	if err != nil {
 		return err
 	}
