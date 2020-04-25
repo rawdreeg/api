@@ -17,6 +17,8 @@ import (
 )
 
 type Message struct {
+	client *Client `datastore:"-"`
+
 	Key       *datastore.Key `json:"-"        datastore:"__key__"`
 	ID        string         `json:"id"       datastore:"-"`
 	UserKey   *datastore.Key `json:"-"`
@@ -31,7 +33,7 @@ type Message struct {
 	Link      *og.LinkData   `json:"link"     datastore:",noindex"`
 }
 
-func NewThreadMessage(u *User, t *Thread, body, photoKey string, link og.LinkData) (Message, error) {
+func (c *Client) NewThreadMessage(u *User, t *Thread, body, photoKey string, link og.LinkData) (Message, error) {
 	ts := time.Now()
 
 	linkPtr := &link
@@ -40,6 +42,8 @@ func NewThreadMessage(u *User, t *Thread, body, photoKey string, link og.LinkDat
 	}
 
 	message := Message{
+		client: c,
+
 		Key:       datastore.IncompleteKey("Message", nil),
 		UserKey:   u.Key,
 		User:      MapUserToUserPartial(u),
@@ -67,10 +71,12 @@ func NewThreadMessage(u *User, t *Thread, body, photoKey string, link og.LinkDat
 	return message, nil
 }
 
-func NewEventMessage(u *User, e *Event, body, photoKey string) (Message, error) {
+func (c *Client) NewEventMessage(u *User, e *Event, body, photoKey string) (Message, error) {
 	ts := time.Now()
 
 	message := Message{
+		client: c,
+
 		Key:       datastore.IncompleteKey("Message", nil),
 		UserKey:   u.Key,
 		User:      MapUserToUserPartial(u),
@@ -210,7 +216,7 @@ func (m *Message) DeletePhoto(ctx context.Context, key string) error {
 }
 
 func (m *Message) Commit(ctx context.Context) error {
-	key, err := db.DefaultClient.Put(ctx, m.Key, m)
+	key, err := m.client.db.Put(ctx, m.Key, m)
 	if err != nil {
 		return err
 	}
@@ -222,26 +228,26 @@ func (m *Message) Commit(ctx context.Context) error {
 }
 
 func (m *Message) Delete(ctx context.Context) error {
-	if err := db.DefaultClient.Delete(ctx, m.Key); err != nil {
+	if err := m.client.db.Delete(ctx, m.Key); err != nil {
 		return err
 	}
 	return nil
 }
 
-func GetMessagesByThread(ctx context.Context, t *Thread) ([]*Message, error) {
-	return GetMessagesByKey(ctx, t.Key)
+func (c *Client) GetMessagesByThread(ctx context.Context, t *Thread) ([]*Message, error) {
+	return c.GetMessagesByKey(ctx, t.Key)
 }
 
-func GetMessagesByEvent(ctx context.Context, e *Event) ([]*Message, error) {
-	return GetMessagesByKey(ctx, e.Key)
+func (c *Client) GetMessagesByEvent(ctx context.Context, e *Event) ([]*Message, error) {
+	return c.GetMessagesByKey(ctx, e.Key)
 }
 
-func GetMessagesByKey(ctx context.Context, k *datastore.Key) ([]*Message, error) {
+func (c *Client) GetMessagesByKey(ctx context.Context, k *datastore.Key) ([]*Message, error) {
 	var messages []*Message
 
 	q := datastore.NewQuery("Message").Filter("ParentKey =", k)
 
-	if _, err := db.DefaultClient.GetAll(ctx, q, &messages); err != nil {
+	if _, err := c.db.GetAll(ctx, q, &messages); err != nil {
 		return messages, err
 	}
 
@@ -250,11 +256,12 @@ func GetMessagesByKey(ctx context.Context, k *datastore.Key) ([]*Message, error)
 		userKeys[i] = messages[i].UserKey
 	}
 	users := make([]*User, len(userKeys))
-	if err := db.DefaultClient.GetMulti(ctx, userKeys, users); err != nil {
+	if err := c.db.GetMulti(ctx, userKeys, users); err != nil {
 		return messages, err
 	}
 
 	for i := range messages {
+		messages[i].client = c
 		messages[i].User = MapUserToUserPartial(users[i])
 	}
 
@@ -266,17 +273,21 @@ func GetMessagesByKey(ctx context.Context, k *datastore.Key) ([]*Message, error)
 	return messages, nil
 }
 
-func GetUnhydratedMessagesByUser(ctx context.Context, u *User) ([]*Message, error) {
+func (c *Client) GetUnhydratedMessagesByUser(ctx context.Context, u *User) ([]*Message, error) {
 	var messages []*Message
 	q := datastore.NewQuery("Message").Filter("UserKey =", u.Key)
 	if _, err := db.DefaultClient.GetAll(ctx, q, &messages); err != nil {
 		return messages, err
 	}
 
+	for i := range messages {
+		messages[i].client = c
+	}
+
 	return messages, nil
 }
 
-func GetMessageByID(ctx context.Context, id string) (Message, error) {
+func (c *Client) GetMessageByID(ctx context.Context, id string) (Message, error) {
 	var op errors.Op = "models.GetMessageByID"
 	var message Message
 
@@ -285,10 +296,12 @@ func GetMessageByID(ctx context.Context, id string) (Message, error) {
 		return message, errors.E(op, err)
 	}
 
-	err = db.DefaultClient.Get(ctx, key, &message)
+	err = c.db.Get(ctx, key, &message)
 	if err != nil {
 		return message, errors.E(op, err)
 	}
+
+	message.client = c
 
 	return message, nil
 }

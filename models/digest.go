@@ -25,10 +25,10 @@ func (e *DigestError) Error() string {
 	return "Nothing to digest"
 }
 
-func GenerateDigestList(ctx context.Context, digestables []Digestable, u *User) ([]DigestItem, error) {
+func (c *Client) GenerateDigestList(ctx context.Context, digestables []Digestable, u *User) ([]DigestItem, error) {
 	var digest []DigestItem
 	for i := range digestables {
-		item, err := GenerateDigestItem(ctx, digestables[i], u)
+		item, err := c.GenerateDigestItem(ctx, digestables[i], u)
 		if err != nil {
 			switch err.(type) {
 			case *DigestError:
@@ -44,8 +44,8 @@ func GenerateDigestList(ctx context.Context, digestables []Digestable, u *User) 
 	return digest, nil
 }
 
-func GenerateDigestItem(ctx context.Context, d Digestable, u *User) (DigestItem, error) {
-	messages, err := GetMessagesByKey(ctx, d.GetKey())
+func (c *Client) GenerateDigestItem(ctx context.Context, d Digestable, u *User) (DigestItem, error) {
+	messages, err := c.GetMessagesByKey(ctx, d.GetKey())
 	if err != nil {
 		return DigestItem{}, err
 	}

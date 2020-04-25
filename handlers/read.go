@@ -26,7 +26,7 @@ func (c *Config) MarkThreadAsRead(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := markMessagesAsRead(ctx, &thread, &user, thread.Key); err != nil {
+	if err := c.markMessagesAsRead(ctx, &thread, &user, thread.Key); err != nil {
 		bjson.HandleError(w, err)
 		return
 	}
@@ -55,7 +55,7 @@ func (c *Config) MarkEventAsRead(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := markMessagesAsRead(ctx, &event, &user, event.Key); err != nil {
+	if err := c.markMessagesAsRead(ctx, &event, &user, event.Key); err != nil {
 		bjson.HandleError(w, err)
 		return
 	}
@@ -71,13 +71,13 @@ func (c *Config) MarkEventAsRead(w http.ResponseWriter, r *http.Request) {
 	bjson.WriteJSON(w, event, http.StatusOK)
 }
 
-func markMessagesAsRead(
+func (c *Config) markMessagesAsRead(
 	ctx context.Context,
 	readable models.Readable,
 	user *models.User,
 	key *datastore.Key,
 ) error {
-	messages, err := models.GetMessagesByKey(ctx, key)
+	messages, err := c.ModelsClient.GetMessagesByKey(ctx, key)
 	if err != nil {
 		return err
 	}

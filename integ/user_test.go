@@ -702,7 +702,7 @@ func TestVerifyEmail(t *testing.T) {
 				}
 
 				// Make sure that existingUser5's messages were transferred too
-				messages, err := models.GetUnhydratedMessagesByUser(tc, &existingUser4)
+				messages, err := modelsClient.GetUnhydratedMessagesByUser(tc, &existingUser4)
 				if err != nil {
 					return false
 				}
@@ -726,7 +726,7 @@ func TestVerifyEmail(t *testing.T) {
 				if err != nil {
 					return false
 				}
-				contacts, err := models.GetContactsByUser(tc, &refreshedExistingUser2)
+				contacts, err := modelsClient.GetContactsByUser(tc, &refreshedExistingUser2)
 				if err != nil {
 					return false
 				}

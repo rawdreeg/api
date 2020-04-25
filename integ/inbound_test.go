@@ -18,7 +18,7 @@ func TestInboundSucceedsWithValidPayload(t *testing.T) {
 	u3, _ := createTestUser(t)
 	thread := createTestThread(t, &u1, []*models.User{&u2, &u3})
 
-	messages, err := models.GetMessagesByThread(tc, &thread)
+	messages, err := modelsClient.GetMessagesByThread(tc, &thread)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -51,7 +51,7 @@ func TestInboundSucceedsWithValidPayload(t *testing.T) {
 	rr := httptest.NewRecorder()
 	th.ServeHTTP(rr, req)
 
-	newMessages, err := models.GetMessagesByThread(tc, &thread)
+	newMessages, err := modelsClient.GetMessagesByThread(tc, &thread)
 	if err != nil {
 		t.Fatal(err)
 	}

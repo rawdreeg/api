@@ -253,7 +253,7 @@ func (t *Thread) RemoveUser(u *User) {
 }
 
 func (t *Thread) Send(ctx context.Context) error {
-	messages, err := GetMessagesByThread(ctx, t)
+	messages, err := t.client.GetMessagesByThread(ctx, t)
 	if err != nil {
 		return err
 	}

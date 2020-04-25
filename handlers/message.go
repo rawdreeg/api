@@ -34,7 +34,7 @@ func (c *Config) GetMessagesByThread(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	messages, err := models.GetMessagesByThread(ctx, &thread)
+	messages, err := c.ModelsClient.GetMessagesByThread(ctx, &thread)
 	if err != nil {
 		bjson.HandleError(w, err)
 		return
@@ -87,7 +87,7 @@ func (c *Config) AddMessageToThread(w http.ResponseWriter, r *http.Request) {
 	messageBody := html.UnescapeString(payload.Body)
 	link := og.Extract(ctx, messageBody)
 
-	message, err := models.NewThreadMessage(
+	message, err := c.ModelsClient.NewThreadMessage(
 		&u,
 		&thread,
 		messageBody,
@@ -162,7 +162,7 @@ func (c *Config) DeleteThreadMessage(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	id := vars["messageID"]
 
-	messages, err := models.GetMessagesByThread(ctx, &thread)
+	messages, err := c.ModelsClient.GetMessagesByThread(ctx, &thread)
 	if err != nil {
 		bjson.HandleError(w, errors.E(op, err))
 		return
@@ -230,7 +230,7 @@ func (c *Config) GetMessagesByEvent(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	messages, err := models.GetMessagesByEvent(ctx, &event)
+	messages, err := c.ModelsClient.GetMessagesByEvent(ctx, &event)
 	if err != nil {
 		bjson.HandleError(w, err)
 		return
@@ -275,7 +275,7 @@ func (c *Config) AddMessageToEvent(w http.ResponseWriter, r *http.Request) {
 		photoKey = storage.DefaultClient.GetKeyFromPhotoURL(photoURL)
 	}
 
-	message, err := models.NewEventMessage(
+	message, err := c.ModelsClient.NewEventMessage(
 		&u,
 		&event,
 		html.UnescapeString(payload.Body),
@@ -319,7 +319,7 @@ func (c *Config) DeleteEventMessage(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	id := vars["messageID"]
 
-	m, err := models.GetMessageByID(ctx, id)
+	m, err := c.ModelsClient.GetMessageByID(ctx, id)
 	if err != nil {
 		bjson.HandleError(w, errors.E(op, err, http.StatusNotFound))
 		return
@@ -370,7 +370,7 @@ func (c *Config) DeletePhotoFromMessage(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	m, err := models.GetMessageByID(ctx, id)
+	m, err := c.ModelsClient.GetMessageByID(ctx, id)
 	if err != nil {
 		bjson.HandleError(w, errors.E(op, err, http.StatusNotFound))
 		return

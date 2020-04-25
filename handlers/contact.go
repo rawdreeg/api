@@ -15,7 +15,7 @@ func (c *Config) GetContacts(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	u := middleware.UserFromContext(ctx)
 
-	contacts, err := models.GetContactsByUser(ctx, &u)
+	contacts, err := c.ModelsClient.GetContactsByUser(ctx, &u)
 	if err != nil {
 		bjson.HandleError(w, err)
 		return

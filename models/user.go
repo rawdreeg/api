@@ -416,7 +416,7 @@ func (u *User) Welcome(ctx context.Context) {
 		return
 	}
 
-	message, err := NewThreadMessage(u.client.supportUser, &thread, u.client.welcomeMessage, "", og.LinkData{})
+	message, err := u.client.NewThreadMessage(u.client.supportUser, &thread, u.client.welcomeMessage, "", og.LinkData{})
 	if err != nil {
 		log.Alarm(errors.E(op, err))
 		return
@@ -465,7 +465,7 @@ func (u *User) SendDigest(ctx context.Context) error {
 		}
 	}
 
-	digestList, err := GenerateDigestList(ctx, digestables, u)
+	digestList, err := u.client.GenerateDigestList(ctx, digestables, u)
 	if err != nil {
 		return err
 	}
@@ -755,7 +755,7 @@ func (c *Client) reassignContacts(ctx context.Context, tx *datastore.Transaction
 }
 
 func (c *Client) reassignMessageUsers(ctx context.Context, tx *datastore.Transaction, old, newUser *User) error {
-	userMessages, err := GetUnhydratedMessagesByUser(ctx, old)
+	userMessages, err := c.GetUnhydratedMessagesByUser(ctx, old)
 	if err != nil {
 		return err
 	}
