@@ -8,7 +8,6 @@ import (
 	"github.com/hiconvo/api/log"
 	"github.com/hiconvo/api/mail"
 	"github.com/hiconvo/api/template"
-	"github.com/hiconvo/api/utils/magic"
 )
 
 const (
@@ -131,7 +130,7 @@ func (c *Client) sendThread(thread *Thread, messages []*Message) error {
 			Subject:   thread.Subject,
 			FromName:  sender.FullName,
 			Messages:  tplMessages,
-			MagicLink: magic.NewLink(curUser.Key, curUser.Token, "magic"),
+			MagicLink: c.magic.NewLink(curUser.Key, curUser.Token, "magic"),
 		})
 		if err != nil {
 			return err
@@ -183,7 +182,7 @@ func (c *Client) sendEvent(event *Event, isUpdate bool) error {
 			Time:        event.GetFormatedTime(),
 			Description: event.Description,
 			FromName:    event.Owner.FullName,
-			MagicLink: magic.NewLink(
+			MagicLink: c.magic.NewLink(
 				curUser.Key,
 				strconv.FormatBool(!event.IsInFuture()),
 				fmt.Sprintf("rsvp/%s",
@@ -226,7 +225,7 @@ func (c *Client) sendEventInvitation(event *Event, user *User) error {
 		Time:        event.GetFormatedTime(),
 		Description: event.Description,
 		FromName:    event.Owner.FullName,
-		MagicLink: magic.NewLink(
+		MagicLink: c.magic.NewLink(
 			user.Key,
 			strconv.FormatBool(!event.IsInFuture()),
 			fmt.Sprintf("rsvp/%s",
@@ -326,7 +325,7 @@ func (c *Client) sendDigest(digestList []DigestItem, upcomingEvents []*Event, us
 	plainText, html, err := template.RenderDigest(template.Digest{
 		Items:     items,
 		Events:    templateEvents,
-		MagicLink: magic.NewLink(user.Key, user.Token, "magic"),
+		MagicLink: c.magic.NewLink(user.Key, user.Token, "magic"),
 	})
 	if err != nil {
 		return err

@@ -16,7 +16,6 @@ import (
 	"github.com/hiconvo/api/models"
 	notif "github.com/hiconvo/api/notifications"
 	"github.com/hiconvo/api/utils/bjson"
-	"github.com/hiconvo/api/utils/magic"
 	"github.com/hiconvo/api/utils/validate"
 )
 
@@ -566,7 +565,7 @@ func (c *Config) MagicRSVP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := magic.Verify(
+	if err := c.MagicClient.Verify(
 		payload.UserID,
 		payload.Timestamp,
 		strconv.FormatBool(!e.IsInFuture()),
@@ -639,7 +638,7 @@ func (c *Config) MagicInvite(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := magic.Verify(
+	if err := c.MagicClient.Verify(
 		payload.EventID,
 		payload.Timestamp,
 		e.Token,

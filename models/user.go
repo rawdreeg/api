@@ -17,7 +17,6 @@ import (
 	"github.com/hiconvo/api/errors"
 	"github.com/hiconvo/api/log"
 	"github.com/hiconvo/api/queue"
-	"github.com/hiconvo/api/utils/magic"
 	og "github.com/hiconvo/api/utils/opengraph"
 	"github.com/hiconvo/api/utils/random"
 )
@@ -259,21 +258,21 @@ func (u *User) IsRegistered() bool {
 }
 
 func (u *User) SendPasswordResetEmail() error {
-	magicLink := magic.NewLink(u.Key, u.PasswordDigest, "reset")
+	magicLink := u.client.magic.NewLink(u.Key, u.PasswordDigest, "reset")
 	return u.client.sendPasswordResetEmail(u, magicLink)
 }
 
 func (u *User) SendVerifyEmail(email string) error {
 	femail := strings.ToLower(email)
 	salt := femail + strconv.FormatBool(u.HasEmail(femail))
-	magicLink := magic.NewLink(u.Key, salt, "verify/"+femail)
+	magicLink := u.client.magic.NewLink(u.Key, salt, "verify/"+femail)
 	return u.client.sendVerifyEmail(u, email, magicLink)
 }
 
 func (u *User) SendMergeAccountsEmail(emailToMerge string) error {
 	femail := strings.ToLower(emailToMerge)
 	salt := femail + strconv.FormatBool(u.HasEmail(femail))
-	magicLink := magic.NewLink(u.Key, salt, "verify/"+femail)
+	magicLink := u.client.magic.NewLink(u.Key, salt, "verify/"+femail)
 	return u.client.sendMergeAccountsEmail(u, femail, magicLink)
 }
 

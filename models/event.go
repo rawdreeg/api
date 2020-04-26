@@ -13,7 +13,6 @@ import (
 	"github.com/hiconvo/api/db"
 	"github.com/hiconvo/api/errors"
 	"github.com/hiconvo/api/queue"
-	"github.com/hiconvo/api/utils/magic"
 	"github.com/hiconvo/api/utils/random"
 )
 
@@ -371,7 +370,7 @@ func (e *Event) SendInvites(ctx context.Context) error {
 }
 
 func (e *Event) SendInvitesAsync(ctx context.Context) error {
-	return queue.PutEmail(ctx, queue.EmailPayload{
+	return e.client.queue.PutEmail(ctx, queue.EmailPayload{
 		Type:   queue.Event,
 		Action: queue.SendInvites,
 		IDs:    []string{e.ID},
@@ -383,7 +382,7 @@ func (e *Event) SendUpdatedInvites(ctx context.Context) error {
 }
 
 func (e *Event) SendUpdatedInvitesAsync(ctx context.Context) error {
-	return queue.PutEmail(ctx, queue.EmailPayload{
+	return e.client.queue.PutEmail(ctx, queue.EmailPayload{
 		Type:   queue.Event,
 		Action: queue.SendUpdatedInvites,
 		IDs:    []string{e.ID},
@@ -439,7 +438,7 @@ func (e *Event) RollToken() {
 }
 
 func (e *Event) GetMagicLink() string {
-	return magic.NewLink(e.Key, e.Token, "invite")
+	return e.client.magic.NewLink(e.Key, e.Token, "invite")
 }
 
 func (c *Client) GetEventByID(ctx context.Context, id string) (Event, error) {

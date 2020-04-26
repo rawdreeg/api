@@ -195,7 +195,7 @@ func (c *Config) OAuth(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	oauthPayload, err := oauth.Verify(ctx, payload)
+	oauthPayload, err := c.OAuthClient.Verify(ctx, payload)
 	if err != nil {
 		bjson.HandleError(w, err)
 		return
@@ -396,7 +396,7 @@ func (c *Config) UpdatePassword(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := magic.Verify(
+	if err := c.MagicClient.Verify(
 		payload.UserID,
 		payload.Timestamp,
 		u.PasswordDigest,
@@ -458,7 +458,7 @@ func (c *Config) VerifyEmail(w http.ResponseWriter, r *http.Request) {
 	femail := strings.ToLower(payload.Email)
 	salt := femail + strconv.FormatBool(u.HasEmail(femail))
 
-	if err := magic.Verify(
+	if err := c.MagicClient.Verify(
 		payload.UserID,
 		payload.Timestamp,
 		salt,
@@ -743,7 +743,7 @@ func (c *Config) MagicLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := magic.Verify(
+	if err := c.MagicClient.Verify(
 		payload.UserID,
 		payload.Timestamp,
 		u.Token,

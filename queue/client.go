@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"os"
 
 	cloudtasks "cloud.google.com/go/cloudtasks/apiv2"
 	taskspb "google.golang.org/genproto/googleapis/cloud/tasks/v2"
@@ -19,40 +18,15 @@ type (
 )
 
 const (
-	// User denotes a User object type, for use in an EmailPayload
-	User emailType = "User"
-	// Event denotes a Event object type, for use in an EmailPayload
-	Event emailType = "Event"
-	// Thread denotes a Thread object type, for use in an EmailPayload
+	User   emailType = "User"
+	Event  emailType = "Event"
 	Thread emailType = "Thread"
 
-	// SendInvites denotes a SendInvites actoin, for use in an EmailPayload.
-	// It can only be used when Event is the type.
-	SendInvites emailAction = "SendInvites"
-	// SendUpdatedInvites denotes a SendUpdatedInvites actoin, for use in an EmailPayload.
-	// It can only be used when Event is the type.
+	SendInvites        emailAction = "SendInvites"
 	SendUpdatedInvites emailAction = "SendUpdatedInvites"
-	// SendThread denotes a SendThread actoin, for use in an EmailPayload.
-	// It can only be used when Thread is the type.
-	SendThread emailAction = "SendThread"
-	// SendWelcome denotes a SendWelcome actoin, for use in an EmailPayload
-	// It can only be used when User is the type.
-	SendWelcome emailAction = "SendWelcome"
+	SendThread         emailAction = "SendThread"
+	SendWelcome        emailAction = "SendWelcome"
 )
-
-var DefaultClient Client
-
-func init() {
-	if projectID := os.Getenv("GOOGLE_CLOUD_PROJECT"); projectID == "local-convo-api" || projectID == "" {
-		DefaultClient = NewLogger()
-	} else {
-		DefaultClient = NewClient(context.Background(), projectID)
-	}
-}
-
-func PutEmail(ctx context.Context, payload EmailPayload) error {
-	return DefaultClient.PutEmail(ctx, payload)
-}
 
 // EmailPayload is a representation of an async email task.
 type EmailPayload struct {

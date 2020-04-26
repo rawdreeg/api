@@ -11,6 +11,7 @@ import (
 	"github.com/hiconvo/api/queue"
 	"github.com/hiconvo/api/search"
 	"github.com/hiconvo/api/storage"
+	"github.com/hiconvo/api/utils/magic"
 )
 
 type Client struct {
@@ -20,6 +21,7 @@ type Client struct {
 	mail    mail.Client          `datastore:"-"`
 	queue   queue.Client         `datastore:"-"`
 	storage *storage.Client      `datastore:"-"`
+	magic   magic.Client         `datastore:"-"`
 
 	supportUser    *User
 	welcomeMessage string
@@ -32,6 +34,7 @@ func NewClient(
 	mc mail.Client,
 	qc queue.Client,
 	sto *storage.Client,
+	mag magic.Client,
 	supportPassword string) *Client {
 	c := &Client{
 		db:      dc,
@@ -40,6 +43,7 @@ func NewClient(
 		mail:    mc,
 		queue:   qc,
 		storage: sto,
+		magic:   mag,
 	}
 	c.initSupportUser(supportPassword)
 	c.welcomeMessage = readStringFromFile("welcome.md")
@@ -52,7 +56,7 @@ func (c *Client) initSupportUser(supportPassword string) {
 
 	u, found, err := c.GetUserByEmail(ctx, "support@convo.events")
 	if err != nil {
-		panic(err)
+		panic(errors.E(op, err))
 	}
 
 	if !found {

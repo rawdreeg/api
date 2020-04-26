@@ -17,13 +17,18 @@ import (
 	"github.com/hiconvo/api/queue"
 	"github.com/hiconvo/api/search"
 	"github.com/hiconvo/api/storage"
+	"github.com/hiconvo/api/utils/magic"
+	"github.com/hiconvo/api/utils/oauth"
 	"github.com/hiconvo/api/utils/places"
 	"github.com/hiconvo/api/utils/secrets"
 )
 
 func main() {
-	dbClient := db.NewClient(context.Background(), os.Getenv("GOOGLE_CLOUD_PROJECT"))
-	secretsClient := secrets.NewClient(context.Background(), dbClient)
+	projectID := os.Getenv("GOOGLE_CLOUD_PROJECT")
+	ctx := context.Background()
+
+	dbClient := db.NewClient(ctx, projectID)
+	secretsClient := secrets.NewClient(ctx, dbClient)
 
 	raven.SetDSN(secretsClient.Get("SENTRY_DSN", ""))
 	raven.SetRelease(os.Getenv("GAE_VERSION"))
@@ -38,6 +43,15 @@ func main() {
 		secretsClient.Get("PHOTO_BUCKET_NAME", ""),
 	)
 	mailClient := mail.NewClient(secretsClient.Get("SENDGRID_API_KEY", ""))
+	oauthClient := oauth.NewClient(secretsClient.Get("GOOGLE_OAUTH_KEY", ""))
+	magicClient := magic.NewClient(secretsClient.Get("APP_SECRET", ""))
+
+	var queueClient queue.Client
+	if projectID == "local-convo-api" || projectID == "" {
+		queueClient = queue.NewLogger()
+	} else {
+		queueClient = queue.NewClient(ctx, projectID)
+	}
 
 	http.Handle("/", handlers.New(&handlers.Config{
 		ModelsClient: models.NewClient(
@@ -45,8 +59,9 @@ func main() {
 			ntfClient,
 			search.NewClient(secretsClient.Get("ELASTICSEARCH_HOST", "elasticsearch")),
 			mailClient,
-			queue.DefaultClient,
+			queueClient,
 			storageClient,
+			magicClient,
 			secretsClient.Get("SUPPORT_PASSWORD", ""),
 		),
 		DB:            dbClient,
@@ -54,6 +69,8 @@ func main() {
 		NtfClient:     ntfClient,
 		StorageClient: storageClient,
 		MailClient:    mailClient,
+		OAuthClient:   oauthClient,
+		MagicClient:   magicClient,
 	}))
 
 	port := os.Getenv("PORT")

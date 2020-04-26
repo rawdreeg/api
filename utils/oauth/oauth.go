@@ -9,8 +9,6 @@ import (
 	"github.com/hiconvo/api/errors"
 )
 
-var googleAud string = ""
-
 type UserPayload struct {
 	Provider string `validate:"regexp=^(google|facebook)$"`
 	Token    string `validate:"nonzero"`
@@ -25,20 +23,31 @@ type ProviderPayload struct {
 	TempAvatar string
 }
 
-// Verify both verifies the fiven oauth token and retrieves needed info about
-// the user.
-func Verify(ctx context.Context, payload UserPayload) (ProviderPayload, error) {
-	if payload.Provider == "google" {
-		return verifyGoogleToken(ctx, payload)
-	}
-
-	return verifyFacebookToken(ctx, payload)
+type Client interface {
+	Verify(context.Context, UserPayload) (ProviderPayload, error)
 }
 
-func verifyGoogleToken(ctx context.Context, payload UserPayload) (ProviderPayload, error) {
+type clientImpl struct {
+	googleAud string
+}
+
+func NewClient(googleAud string) Client {
+	return &clientImpl{googleAud}
+}
+
+func (c *clientImpl) Verify(ctx context.Context, payload UserPayload) (ProviderPayload, error) {
+	if payload.Provider == "google" {
+		return c.verifyGoogleToken(ctx, payload)
+	}
+
+	return c.verifyFacebookToken(ctx, payload)
+}
+
+func (c *clientImpl) verifyGoogleToken(ctx context.Context, payload UserPayload) (ProviderPayload, error) {
 	var op errors.Op = "oauth.verifyGoogleToken"
 
 	url := fmt.Sprintf("https://oauth2.googleapis.com/tokeninfo?id_token=%s", payload.Token)
+
 	res, err := http.Get(url)
 	if err != nil {
 		return ProviderPayload{}, errors.E(op, err)
@@ -49,7 +58,7 @@ func verifyGoogleToken(ctx context.Context, payload UserPayload) (ProviderPayloa
 		return ProviderPayload{}, errors.E(op, err)
 	}
 
-	if data["aud"] != googleAud {
+	if data["aud"] != c.googleAud {
 		return ProviderPayload{}, errors.E(op, http.StatusBadRequest, errors.Str("Aud did not match"))
 	}
 
@@ -63,12 +72,13 @@ func verifyGoogleToken(ctx context.Context, payload UserPayload) (ProviderPayloa
 	}, nil
 }
 
-func verifyFacebookToken(ctx context.Context, payload UserPayload) (ProviderPayload, error) {
+func (c *clientImpl) verifyFacebookToken(ctx context.Context, payload UserPayload) (ProviderPayload, error) {
 	var op errors.Op = "oauth.verifyFacebookToken"
 
 	url := fmt.Sprintf(
 		"https://graph.facebook.com/me?fields=id,email,first_name,last_name&access_token=%s",
 		payload.Token)
+
 	res, err := http.Get(url)
 	if err != nil {
 		return ProviderPayload{}, errors.E(op, err)

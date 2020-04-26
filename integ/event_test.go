@@ -13,7 +13,6 @@ import (
 	jsonpath "github.com/steinfletcher/apitest-jsonpath"
 
 	"github.com/hiconvo/api/models"
-	"github.com/hiconvo/api/utils/magic"
 	"github.com/hiconvo/api/utils/random"
 	"github.com/hiconvo/api/utils/thelpers"
 )
@@ -717,13 +716,13 @@ func TestMagicRSVP(t *testing.T) {
 
 	event := createTestEvent(t, &owner, []*models.User{&existingUser, &existingUser2}, []*models.User{})
 
-	link := magic.NewLink(existingUser.Key, strconv.FormatBool(event.HasRSVP(&existingUser)), "rsvp")
+	link := magicClient.NewLink(existingUser.Key, strconv.FormatBool(event.HasRSVP(&existingUser)), "rsvp")
 	split := strings.Split(link, "/")
 	kenc := split[len(split)-3]
 	b64ts := split[len(split)-2]
 	sig := split[len(split)-1]
 
-	link2 := magic.NewLink(existingUser2.Key, strconv.FormatBool(event.HasRSVP(&existingUser2)), "rsvp")
+	link2 := magicClient.NewLink(existingUser2.Key, strconv.FormatBool(event.HasRSVP(&existingUser2)), "rsvp")
 	split2 := strings.Split(link2, "/")
 	kenc2 := split2[len(split2)-3]
 	b64ts2 := split2[len(split2)-2]

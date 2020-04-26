@@ -13,7 +13,6 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"github.com/hiconvo/api/models"
-	"github.com/hiconvo/api/utils/magic"
 	"github.com/hiconvo/api/utils/thelpers"
 )
 
@@ -439,14 +438,14 @@ func TestUpdateUser(t *testing.T) {
 
 func TestUpdatePassword(t *testing.T) {
 	existingUser, _ := createTestUser(t)
-	link := magic.NewLink(existingUser.Key, existingUser.PasswordDigest, "reset")
+	link := magicClient.NewLink(existingUser.Key, existingUser.PasswordDigest, "reset")
 	split := strings.Split(link, "/")
 	kenc := split[len(split)-3]
 	b64ts := split[len(split)-2]
 	sig := split[len(split)-1]
 
 	existingUser2, _ := createTestUser(t)
-	link2 := magic.NewLink(existingUser2.Key, existingUser2.PasswordDigest, "reset")
+	link2 := magicClient.NewLink(existingUser2.Key, existingUser2.PasswordDigest, "reset")
 	split2 := strings.Split(link2, "/")
 	kenc2 := split2[len(split2)-3]
 	b64ts2 := split2[len(split2)-2]
@@ -524,7 +523,7 @@ func TestUpdatePassword(t *testing.T) {
 func createVerifyLink(u models.User, email string) (string, string, string) {
 	salt := email + strconv.FormatBool(u.HasEmail(email))
 
-	link := magic.NewLink(u.Key, salt, "verify")
+	link := magicClient.NewLink(u.Key, salt, "verify")
 
 	split := strings.Split(link, "/")
 	kenc := split[len(split)-3]
@@ -852,7 +851,7 @@ func TestUploadAvatar(t *testing.T) {
 
 func TestMagicLogin(t *testing.T) {
 	user, _ := createTestUser(t)
-	link := magic.NewLink(user.Key, user.Token, "magic")
+	link := magicClient.NewLink(user.Key, user.Token, "magic")
 	split := strings.Split(link, "/")
 	kenc := split[len(split)-3]
 	b64ts := split[len(split)-2]

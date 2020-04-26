@@ -19,6 +19,8 @@ import (
 	"github.com/hiconvo/api/queue"
 	"github.com/hiconvo/api/search"
 	"github.com/hiconvo/api/storage"
+	"github.com/hiconvo/api/utils/magic"
+	"github.com/hiconvo/api/utils/oauth"
 	og "github.com/hiconvo/api/utils/opengraph"
 	"github.com/hiconvo/api/utils/places"
 	"github.com/hiconvo/api/utils/random"
@@ -31,6 +33,7 @@ var (
 	th           http.Handler
 	tclient      *datastore.Client
 	modelsClient *models.Client
+	magicClient  magic.Client
 )
 
 func TestMain(m *testing.M) {
@@ -48,6 +51,8 @@ func TestMain(m *testing.M) {
 	)
 	ntfClient := notifications.NewLogger()
 	mailClient := mail.NewLogger()
+	magicClient = magic.NewClient("testing")
+	oauthClient := oauth.NewClient("")
 
 	// Set globals to be used by tests below
 	tc = ctx
@@ -58,6 +63,7 @@ func TestMain(m *testing.M) {
 		mailClient,
 		queue.NewLogger(),
 		storageClient,
+		magicClient,
 		"supportPassword",
 	)
 	th = handlers.New(&handlers.Config{
@@ -67,6 +73,8 @@ func TestMain(m *testing.M) {
 		NtfClient:     ntfClient,
 		StorageClient: storageClient,
 		MailClient:    mailClient,
+		OAuthClient:   oauthClient,
+		MagicClient:   magicClient,
 	})
 	tclient = client
 

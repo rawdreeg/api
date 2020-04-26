@@ -12,6 +12,8 @@ import (
 	"github.com/hiconvo/api/notifications"
 	"github.com/hiconvo/api/storage"
 	"github.com/hiconvo/api/utils/bjson"
+	"github.com/hiconvo/api/utils/magic"
+	"github.com/hiconvo/api/utils/oauth"
 	"github.com/hiconvo/api/utils/places"
 )
 
@@ -22,6 +24,8 @@ type Config struct {
 	NtfClient     notifications.Client
 	StorageClient *storage.Client
 	MailClient    mail.Client
+	OAuthClient   oauth.Client
+	MagicClient   magic.Client
 }
 
 // New mounts all of the application's endpoints.

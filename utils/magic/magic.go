@@ -16,9 +16,20 @@ import (
 	"github.com/hiconvo/api/errors"
 )
 
-var secret = "TODO"
+type Client interface {
+	NewLink(k *datastore.Key, salt, action string) string
+	Verify(kenc, b64ts, salt, sig string) error
+}
 
-func NewLink(k *datastore.Key, salt, action string) string {
+type clientImpl struct {
+	secret string
+}
+
+func NewClient(secret string) Client {
+	return &clientImpl{secret}
+}
+
+func (c *clientImpl) NewLink(k *datastore.Key, salt, action string) string {
 	// Get time and convert to epoc string
 	ts := time.Now().Unix()
 	sts := strconv.FormatInt(ts, 10)
@@ -28,15 +39,27 @@ func NewLink(k *datastore.Key, salt, action string) string {
 	kenc := k.Encode()
 
 	return fmt.Sprintf("https://app.convo.events/%s/%s/%s/%s",
-		action, kenc, b64ts, getSignature(kenc, b64ts, salt))
+		action, kenc, b64ts, c.getSignature(kenc, b64ts, salt))
 }
 
-func Verify(kenc, b64ts, salt, sig string) error {
-	if sig == getSignature(kenc, b64ts, salt) {
+func (c *clientImpl) Verify(kenc, b64ts, salt, sig string) error {
+	if sig == c.getSignature(kenc, b64ts, salt) {
 		return nil
 	}
 
 	return errors.E(errors.Op("magic.Verify"), http.StatusUnauthorized, errors.Str("InvalidSignature"))
+}
+
+func (c *clientImpl) getSignature(uid, b64ts, salt string) string {
+	h := hmac.New(sha256.New, []byte(c.secret))
+
+	if _, err := h.Write([]byte(uid + b64ts + salt)); err != nil {
+		panic(errors.E(errors.Opf("getSignature(uid=%s, b64ts=%s, salt=%s)", uid, b64ts, salt), err))
+	}
+
+	sha := hex.EncodeToString(h.Sum(nil))
+
+	return sha
 }
 
 func GetTimeFromB64(b64ts string) (time.Time, error) {
@@ -67,17 +90,10 @@ func TooOld(b64ts string) error {
 		return errors.E(op, http.StatusUnauthorized, err)
 	}
 
-	diff := time.Now().Sub(ts)
+	diff := time.Since(ts)
 	if diff.Hours() > float64(24) {
 		return errors.E(op, http.StatusUnauthorized, errors.Str("TooOld"))
 	}
 
 	return nil
-}
-
-func getSignature(uid, b64ts, salt string) string {
-	h := hmac.New(sha256.New, []byte(secret))
-	h.Write([]byte(uid + b64ts + salt))
-	sha := hex.EncodeToString(h.Sum(nil))
-	return sha
 }
