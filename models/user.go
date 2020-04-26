@@ -427,52 +427,7 @@ func (u *User) Welcome(ctx context.Context) {
 }
 
 func (u *User) SendDigest(ctx context.Context) error {
-	events, err := u.client.GetEventsByUser(ctx, u, &Pagination{})
-	if err != nil {
-		return err
-	}
-
-	threads, err := u.client.GetThreadsByUser(ctx, u, &Pagination{})
-	if err != nil {
-		return err
-	}
-
-	// Convert the events into Digestables and filter out read items
-	var digestables []Digestable
-	// Save the upcoming events to a slice at the same time
-	var upcoming []*Event
-	for i := range events {
-		if !IsRead(events[i], u.Key) {
-			digestables = append(digestables, events[i])
-		}
-
-		if events[i].IsUpcoming() {
-			upcoming = append(upcoming, events[i])
-		}
-	}
-
-	for i := range threads {
-		if !IsRead(threads[i], u.Key) {
-			digestables = append(digestables, threads[i])
-		}
-	}
-
-	digestList, err := u.client.GenerateDigestList(ctx, digestables, u)
-	if err != nil {
-		return err
-	}
-
-	if len(digestList) > 0 || len(upcoming) > 0 {
-		if err := u.client.mail.SendDigest(digestList, upcoming, u); err != nil {
-			return err
-		}
-
-		if err := u.client.MarkDigestedMessagesAsRead(ctx, digestList, u); err != nil {
-			return err
-		}
-	}
-
-	return nil
+	return NewDigestor(u).Do(ctx)
 }
 
 func (u *User) MergeWith(ctx context.Context, oldUser *User) error {

@@ -98,14 +98,7 @@ func (c *Config) AddMessageToThread(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Mark the message as read if it is the first message.
-	// Since it will be emailed to all members, it would be redundant
-	// to send in the daily digest.
 	if thread.ResponseCount == 1 {
-		for i := range thread.UserKeys {
-			models.MarkAsRead(&message, thread.UserKeys[i])
-		}
-
 		// Name the thread after the link, if included
 		if message.HasLink() && message.Link.Title != "" {
 			thread.Subject = message.Link.Title
@@ -127,25 +120,17 @@ func (c *Config) AddMessageToThread(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if thread.ResponseCount == 1 {
-		// Only send the first message as an email
-		if err := thread.SendAsync(ctx); err != nil {
-			bjson.HandleError(w, errors.E(op, err))
-			return
-		}
-	} else {
-		// Send a notification for all later responses
-		if err := c.Ntf.Put(notif.Notification{
-			UserKeys:   notif.FilterKey(thread.UserKeys, u.Key),
-			Actor:      u.FullName,
-			Verb:       notif.NewMessage,
-			Target:     notif.Thread,
-			TargetID:   thread.ID,
-			TargetName: thread.Subject,
-		}); err != nil {
-			// Log the error but don't fail the request
-			log.Alarm(err)
-		}
+	// Send a notification for all later responses
+	if err := c.Ntf.Put(notif.Notification{
+		UserKeys:   notif.FilterKey(thread.UserKeys, u.Key),
+		Actor:      u.FullName,
+		Verb:       notif.NewMessage,
+		Target:     notif.Thread,
+		TargetID:   thread.ID,
+		TargetName: thread.Subject,
+	}); err != nil {
+		// Log the error but don't fail the request
+		log.Alarm(err)
 	}
 
 	bjson.WriteJSON(w, message, http.StatusCreated)

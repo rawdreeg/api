@@ -9,6 +9,7 @@ import (
 	"cloud.google.com/go/datastore"
 
 	"github.com/hiconvo/api/errors"
+	"github.com/hiconvo/api/models/read"
 )
 
 func swapKeys(keyList []*datastore.Key, oldKey, newKey *datastore.Key) []*datastore.Key {
@@ -32,8 +33,8 @@ func swapKeys(keyList []*datastore.Key, oldKey, newKey *datastore.Key) []*datast
 	return clean
 }
 
-func swapReadUserKeys(readList []*Read, oldKey, newKey *datastore.Key) []*Read {
-	var clean []*Read
+func swapReadUserKeys(readList []*read.Read, oldKey, newKey *datastore.Key) []*read.Read {
+	var clean []*read.Read
 	seen := map[string]struct{}{}
 	for i := range readList {
 		keyString := readList[i].UserKey.String()
@@ -76,4 +77,19 @@ func readStringFromFile(file string) string {
 	}
 
 	return string(b)
+}
+
+func MapReadsToUserPartials(r read.Readable, users []*User) []*UserPartial {
+	reads := r.GetReads()
+	var userPartials []*UserPartial
+	for i := range reads {
+		for j := range users {
+			if users[j].Key.Equal(reads[i].UserKey) {
+				userPartials = append(userPartials, MapUserToUserPartial(users[j]))
+				break
+			}
+		}
+	}
+
+	return userPartials
 }

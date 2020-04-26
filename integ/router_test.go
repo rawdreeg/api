@@ -45,37 +45,27 @@ func TestMain(m *testing.M) {
 
 	dbClient := db.NewClient(ctx, "local-convo-api")
 	secretsClient := secrets.NewClient(ctx, dbClient)
-	storageClient := storage.NewClient(
-		secretsClient.Get("AVATAR_BUCKET_NAME", ""),
-		secretsClient.Get("PHOTO_BUCKET_NAME", ""),
-	)
-	ntfClient := notifications.NewLogger()
-	mailClient := mail.NewLogger()
-	magicClient = magic.NewClient("testing")
-	oauthClient := oauth.NewClient("")
 
 	// Set globals to be used by tests below
 	tc = ctx
-	modelsClient = models.NewClient(
-		dbClient,
-		ntfClient,
-		search.NewClient(secretsClient.Get("ELASTICSEARCH_HOST", "elasticsearch")),
-		mailClient,
-		queue.NewLogger(),
-		storageClient,
-		magicClient,
-		"supportPassword",
-	)
-	th = handlers.New(&handlers.Config{
-		ModelsClient:  modelsClient,
-		DB:            dbClient,
-		PlacesClient:  places.NewLogger(),
-		NtfClient:     ntfClient,
-		StorageClient: storageClient,
-		MailClient:    mailClient,
-		OAuthClient:   oauthClient,
-		MagicClient:   magicClient,
-	})
+
+	handlerCfg := &handlers.Config{
+		DB:              dbClient,
+		Queue:           queue.NewLogger(),
+		Places:          places.NewLogger(),
+		Ntf:             notifications.NewLogger(),
+		Storage:         storage.NewClient("", ""),
+		Mail:            mail.NewLogger(),
+		OAuthClient:     oauth.NewClient(""),
+		Magic:           magic.NewClient("testing"),
+		Search:          search.NewClient(secretsClient.Get("ELASTICSEARCH_HOST", "elasticsearch")),
+		SupportPassword: "supportPassword",
+	}
+	th = handlers.New(handlerCfg)
+
+	modelsClient = handlerCfg.ModelsClient
+	magicClient = handlerCfg.Magic
+
 	tclient = client
 
 	result := m.Run()

@@ -9,6 +9,7 @@ import (
 	"github.com/hiconvo/api/errors"
 	"github.com/hiconvo/api/middleware"
 	"github.com/hiconvo/api/models"
+	"github.com/hiconvo/api/models/read"
 	"github.com/hiconvo/api/utils/bjson"
 )
 
@@ -30,7 +31,7 @@ func (c *Config) MarkThreadAsRead(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	models.MarkAsRead(&thread, user.Key)
+	read.MarkAsRead(&thread, user.Key)
 	thread.UserReads = models.MapReadsToUserPartials(&thread, thread.Users)
 
 	if err := thread.Commit(ctx); err != nil {
@@ -59,7 +60,7 @@ func (c *Config) MarkEventAsRead(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	models.MarkAsRead(&event, user.Key)
+	read.MarkAsRead(&event, user.Key)
 	event.UserReads = models.MapReadsToUserPartials(&event, event.Users)
 
 	if err := event.Commit(ctx); err != nil {
@@ -72,7 +73,7 @@ func (c *Config) MarkEventAsRead(w http.ResponseWriter, r *http.Request) {
 
 func (c *Config) markMessagesAsRead(
 	ctx context.Context,
-	readable models.Readable,
+	readable read.Readable,
 	user *models.User,
 	key *datastore.Key,
 ) error {
@@ -83,7 +84,7 @@ func (c *Config) markMessagesAsRead(
 
 	messageKeys := make([]*datastore.Key, len(messages))
 	for i := range messages {
-		models.MarkAsRead(messages[i], user.Key)
+		read.MarkAsRead(messages[i], user.Key)
 		messageKeys[i] = messages[i].Key
 	}
 

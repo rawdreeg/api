@@ -23,6 +23,11 @@ import (
 	"github.com/hiconvo/api/utils/secrets"
 )
 
+const (
+	readTimeout  = 5
+	writeTimeout = 60
+)
+
 func main() {
 	ctx := context.Background()
 	projectID := envget("GOOGLE_CLOUD_PROJECT", "local-convo-api")
@@ -49,12 +54,11 @@ func main() {
 	port := os.Getenv("PORT")
 	if port == "" {
 		port = "8080"
-		log.Printf("Defaulting to port %s", port)
 	}
 
 	srv := http.Server{
-		ReadTimeout:  5 * time.Second,
-		WriteTimeout: 30 * time.Second,
+		ReadTimeout:  readTimeout * time.Second,
+		WriteTimeout: writeTimeout * time.Second,
 		Addr:         fmt.Sprintf(":%s", port),
 	}
 

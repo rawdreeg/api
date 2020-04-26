@@ -1,4 +1,4 @@
-package models
+package read
 
 import (
 	"time"
@@ -16,7 +16,7 @@ type Readable interface {
 	SetReads([]*Read)
 }
 
-func NewRead(userKey *datastore.Key) *Read {
+func New(userKey *datastore.Key) *Read {
 	return &Read{
 		UserKey:   userKey,
 		Timestamp: time.Now(),
@@ -31,7 +31,7 @@ func MarkAsRead(r Readable, userKey *datastore.Key) {
 		return
 	}
 
-	reads = append(reads, NewRead(userKey))
+	reads = append(reads, New(userKey))
 
 	r.SetReads(reads)
 }
@@ -50,19 +50,4 @@ func IsRead(r Readable, userKey *datastore.Key) bool {
 	}
 
 	return false
-}
-
-func MapReadsToUserPartials(r Readable, users []*User) []*UserPartial {
-	reads := r.GetReads()
-	var userPartials []*UserPartial
-	for i := range reads {
-		for j := range users {
-			if users[j].Key.Equal(reads[i].UserKey) {
-				userPartials = append(userPartials, MapUserToUserPartial(users[j]))
-				break
-			}
-		}
-	}
-
-	return userPartials
 }

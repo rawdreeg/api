@@ -11,6 +11,7 @@ import (
 
 	"github.com/hiconvo/api/errors"
 	"github.com/hiconvo/api/log"
+	"github.com/hiconvo/api/models/read"
 	og "github.com/hiconvo/api/utils/opengraph"
 )
 
@@ -25,7 +26,7 @@ type Message struct {
 	ParentID  string         `json:"parentId" datastore:"-"`
 	Body      string         `json:"body"     datastore:",noindex"`
 	Timestamp time.Time      `json:"timestamp"`
-	Reads     []*Read        `json:"-"        datastore:",noindex"`
+	Reads     []*read.Read   `json:"-"        datastore:",noindex"`
 	PhotoKeys []string       `json:"-"`
 	Photos    []string       `json:"photos"   datastore:"-"`
 	Link      *og.LinkData   `json:"link"     datastore:",noindex"`
@@ -63,8 +64,8 @@ func (c *Client) NewThreadMessage(u *User, t *Thread, body, photoKey string, lin
 
 	t.IncRespCount()
 
-	ClearReads(t)
-	MarkAsRead(t, u.Key)
+	read.ClearReads(t)
+	read.MarkAsRead(t, u.Key)
 
 	return message, nil
 }
@@ -89,8 +90,8 @@ func (c *Client) NewEventMessage(u *User, e *Event, body, photoKey string) (Mess
 		message.Photos = []string{c.storage.GetPhotoURLFromKey(photoKey)}
 	}
 
-	ClearReads(e)
-	MarkAsRead(e, u.Key)
+	read.ClearReads(e)
+	read.MarkAsRead(e, u.Key)
 
 	return message, nil
 }
@@ -137,11 +138,11 @@ func (m *Message) Load(ps []datastore.Property) error {
 	return nil
 }
 
-func (m *Message) GetReads() []*Read {
+func (m *Message) GetReads() []*read.Read {
 	return m.Reads
 }
 
-func (m *Message) SetReads(newReads []*Read) {
+func (m *Message) SetReads(newReads []*read.Read) {
 	m.Reads = newReads
 }
 

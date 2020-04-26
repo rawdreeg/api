@@ -12,6 +12,7 @@ import (
 
 	"github.com/hiconvo/api/db"
 	"github.com/hiconvo/api/errors"
+	"github.com/hiconvo/api/models/read"
 	"github.com/hiconvo/api/queue"
 	"github.com/hiconvo/api/utils/random"
 )
@@ -40,7 +41,7 @@ type Event struct {
 	Timestamp       time.Time        `json:"timestamp"    datastore:",noindex"`
 	UTCOffset       int              `json:"-"        datastore:",noindex"`
 	UserReads       []*UserPartial   `json:"reads"    datastore:"-"`
-	Reads           []*Read          `json:"-"        datastore:",noindex"`
+	Reads           []*read.Read     `json:"-"        datastore:",noindex"`
 	CreatedAt       time.Time        `json:"createdAt"`
 	GuestsCanInvite bool             `json:"guestsCanInvite"`
 }
@@ -186,11 +187,11 @@ func (e *Event) Delete(ctx context.Context) error {
 	return nil
 }
 
-func (e *Event) GetReads() []*Read {
+func (e *Event) GetReads() []*read.Read {
 	return e.Reads
 }
 
-func (e *Event) SetReads(newReads []*Read) {
+func (e *Event) SetReads(newReads []*read.Read) {
 	e.Reads = newReads
 }
 
@@ -317,7 +318,7 @@ func (e *Event) AddRSVP(u *User) error {
 
 	e.RSVPKeys = append(e.RSVPKeys, u.Key)
 	e.RSVPs = append(e.RSVPs, MapUserToUserPartial(u))
-	e.SetReads([]*Read{})
+	e.SetReads([]*read.Read{})
 
 	return nil
 }
@@ -439,6 +440,10 @@ func (e *Event) RollToken() {
 
 func (e *Event) GetMagicLink() string {
 	return e.client.magic.NewLink(e.Key, e.Token, "invite")
+}
+
+func (e *Event) GetMessages(ctx context.Context) ([]*Message, error) {
+	return e.client.GetMessagesByEvent(ctx, e)
 }
 
 func (c *Client) GetEventByID(ctx context.Context, id string) (Event, error) {

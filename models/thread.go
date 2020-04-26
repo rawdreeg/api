@@ -11,6 +11,7 @@ import (
 
 	"github.com/hiconvo/api/db"
 	"github.com/hiconvo/api/errors"
+	"github.com/hiconvo/api/models/read"
 	"github.com/hiconvo/api/queue"
 )
 
@@ -27,7 +28,7 @@ type Thread struct {
 	Subject       string           `json:"subject"  datastore:",noindex"`
 	Preview       *Message         `json:"preview"  datastore:",noindex"`
 	UserReads     []*UserPartial   `json:"reads"    datastore:"-"`
-	Reads         []*Read          `json:"-"        datastore:",noindex"`
+	Reads         []*read.Read     `json:"-"        datastore:",noindex"`
 	CreatedAt     time.Time        `json:"-"`
 	ResponseCount int              `json:"responseCount" datastore:",noindex"`
 }
@@ -75,9 +76,9 @@ func (c *Client) NewThread(subject string, owner *User, users []*User) (Thread, 
 
 	// Since an email is sent when a thread is created,
 	// it is initialized as having been read by all members.
-	reads := make([]*Read, len(userKeys))
+	reads := make([]*read.Read, len(userKeys))
 	for i := range users {
-		reads[i] = NewRead(userKeys[i])
+		reads[i] = read.New(userKeys[i])
 	}
 
 	return Thread{
@@ -161,11 +162,11 @@ func (t *Thread) Delete(ctx context.Context) error {
 	return nil
 }
 
-func (t *Thread) GetReads() []*Read {
+func (t *Thread) GetReads() []*read.Read {
 	return t.Reads
 }
 
-func (t *Thread) SetReads(newReads []*Read) {
+func (t *Thread) SetReads(newReads []*read.Read) {
 	t.Reads = newReads
 }
 
@@ -272,6 +273,10 @@ func (t *Thread) SendAsync(ctx context.Context) error {
 func (t *Thread) IncRespCount() error {
 	t.ResponseCount++
 	return nil
+}
+
+func (t *Thread) GetMessages(ctx context.Context) ([]*Message, error) {
+	return t.client.GetMessagesByThread(ctx, t)
 }
 
 func (c *Client) GetThreadByID(ctx context.Context, id string) (Thread, error) {
