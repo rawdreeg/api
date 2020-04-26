@@ -259,21 +259,21 @@ func (u *User) IsRegistered() bool {
 
 func (u *User) SendPasswordResetEmail() error {
 	magicLink := u.client.magic.NewLink(u.Key, u.PasswordDigest, "reset")
-	return u.client.sendPasswordResetEmail(u, magicLink)
+	return u.client.mail.SendPasswordResetEmail(u, magicLink)
 }
 
 func (u *User) SendVerifyEmail(email string) error {
 	femail := strings.ToLower(email)
 	salt := femail + strconv.FormatBool(u.HasEmail(femail))
 	magicLink := u.client.magic.NewLink(u.Key, salt, "verify/"+femail)
-	return u.client.sendVerifyEmail(u, email, magicLink)
+	return u.client.mail.SendVerifyEmail(u, email, magicLink)
 }
 
 func (u *User) SendMergeAccountsEmail(emailToMerge string) error {
 	femail := strings.ToLower(emailToMerge)
 	salt := femail + strconv.FormatBool(u.HasEmail(femail))
 	magicLink := u.client.magic.NewLink(u.Key, salt, "verify/"+femail)
-	return u.client.sendMergeAccountsEmail(u, femail, magicLink)
+	return u.client.mail.SendMergeAccountsEmail(u, femail, magicLink)
 }
 
 func (u *User) AddContact(c *User) error {
@@ -463,7 +463,7 @@ func (u *User) SendDigest(ctx context.Context) error {
 	}
 
 	if len(digestList) > 0 || len(upcoming) > 0 {
-		if err := u.client.sendDigest(digestList, upcoming, u); err != nil {
+		if err := u.client.mail.SendDigest(digestList, upcoming, u); err != nil {
 			return err
 		}
 

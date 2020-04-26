@@ -8,6 +8,7 @@ import (
 	"github.com/hiconvo/api/log"
 	"github.com/hiconvo/api/mail"
 	"github.com/hiconvo/api/template"
+	"github.com/hiconvo/api/utils/magic"
 )
 
 const (
@@ -21,7 +22,19 @@ var (
 	_tplStrMergeAccounts = readStringFromFile("merge-accounts.txt")
 )
 
-func (c *Client) sendPasswordResetEmail(u *User, magicLink string) error {
+type MailClient struct {
+	mail  mail.Client
+	magic magic.Client
+}
+
+func NewMailClient(sender mail.Client, magic magic.Client) *MailClient {
+	return &MailClient{
+		mail:  sender,
+		magic: magic,
+	}
+}
+
+func (c *MailClient) SendPasswordResetEmail(u *User, magicLink string) error {
 	plainText, html, err := template.RenderAdminEmail(template.AdminEmail{
 		Body:       _tplStrPasswordReset,
 		ButtonText: "Set password",
@@ -44,7 +57,7 @@ func (c *Client) sendPasswordResetEmail(u *User, magicLink string) error {
 	return c.mail.Send(email)
 }
 
-func (c *Client) sendVerifyEmail(u *User, emailAddress, magicLink string) error {
+func (c *MailClient) SendVerifyEmail(u *User, emailAddress, magicLink string) error {
 	plainText, html, err := template.RenderAdminEmail(template.AdminEmail{
 		Body:       _tplStrVerifyEmail,
 		ButtonText: "Verify",
@@ -67,7 +80,7 @@ func (c *Client) sendVerifyEmail(u *User, emailAddress, magicLink string) error 
 	return c.mail.Send(email)
 }
 
-func (c *Client) sendMergeAccountsEmail(u *User, emailToMerge, magicLink string) error {
+func (c *MailClient) SendMergeAccountsEmail(u *User, emailToMerge, magicLink string) error {
 	plainText, html, err := template.RenderAdminEmail(template.AdminEmail{
 		Body:       _tplStrMergeAccounts,
 		ButtonText: "Verify",
@@ -91,7 +104,7 @@ func (c *Client) sendMergeAccountsEmail(u *User, emailToMerge, magicLink string)
 	return c.mail.Send(email)
 }
 
-func (c *Client) sendThread(thread *Thread, messages []*Message) error {
+func (c *MailClient) SendThread(thread *Thread, messages []*Message) error {
 	if len(messages) == 0 {
 		return errors.E(errors.Op("models.sendThread"), errors.Str("no messages to send"))
 	}
@@ -160,7 +173,7 @@ func (c *Client) sendThread(thread *Thread, messages []*Message) error {
 	return nil
 }
 
-func (c *Client) sendEvent(event *Event, isUpdate bool) error {
+func (c *MailClient) SendEvent(event *Event, isUpdate bool) error {
 	var fmtStr string
 	if isUpdate {
 		fmtStr = "Updated invitation to %s"
@@ -218,7 +231,7 @@ func (c *Client) sendEvent(event *Event, isUpdate bool) error {
 	return nil
 }
 
-func (c *Client) sendEventInvitation(event *Event, user *User) error {
+func (c *MailClient) SendEventInvitation(event *Event, user *User) error {
 	plainText, html, err := template.RenderEvent(template.Event{
 		Name:        event.Name,
 		Address:     event.Address,
@@ -250,7 +263,7 @@ func (c *Client) sendEventInvitation(event *Event, user *User) error {
 	return c.mail.Send(email)
 }
 
-func (c *Client) sendCancellation(event *Event, message string) error {
+func (c *MailClient) SendCancellation(event *Event, message string) error {
 	// Loop through all participants and generate emails
 	emailMessages := make([]mail.EmailMessage, len(event.Users))
 	for i, curUser := range event.Users {
@@ -289,7 +302,7 @@ func (c *Client) sendCancellation(event *Event, message string) error {
 	return nil
 }
 
-func (c *Client) sendDigest(digestList []DigestItem, upcomingEvents []*Event, user *User) error {
+func (c *MailClient) SendDigest(digestList []DigestItem, upcomingEvents []*Event, user *User) error {
 	// Convert all the DigestItems into template.Threads with their messages
 	items := make([]template.Thread, len(digestList))
 	for i := range digestList {

@@ -6,13 +6,13 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"time"
 
 	"github.com/getsentry/raven-go"
 
 	"github.com/hiconvo/api/db"
 	"github.com/hiconvo/api/handlers"
 	"github.com/hiconvo/api/mail"
-	"github.com/hiconvo/api/models"
 	"github.com/hiconvo/api/notifications"
 	"github.com/hiconvo/api/queue"
 	"github.com/hiconvo/api/search"
@@ -24,53 +24,26 @@ import (
 )
 
 func main() {
-	projectID := os.Getenv("GOOGLE_CLOUD_PROJECT")
 	ctx := context.Background()
+	projectID := envget("GOOGLE_CLOUD_PROJECT", "local-convo-api")
 
 	dbClient := db.NewClient(ctx, projectID)
-	secretsClient := secrets.NewClient(ctx, dbClient)
+	sc := secrets.NewClient(ctx, dbClient)
 
-	raven.SetDSN(secretsClient.Get("SENTRY_DSN", ""))
-	raven.SetRelease(os.Getenv("GAE_VERSION"))
-
-	ntfClient := notifications.NewClient(
-		secretsClient.Get("STREAM_API_KEY", "streamKey"),
-		secretsClient.Get("STREAM_API_SECRET", "streamSecret"),
-		"us-east",
-	)
-	storageClient := storage.NewClient(
-		secretsClient.Get("AVATAR_BUCKET_NAME", ""),
-		secretsClient.Get("PHOTO_BUCKET_NAME", ""),
-	)
-	mailClient := mail.NewClient(secretsClient.Get("SENDGRID_API_KEY", ""))
-	oauthClient := oauth.NewClient(secretsClient.Get("GOOGLE_OAUTH_KEY", ""))
-	magicClient := magic.NewClient(secretsClient.Get("APP_SECRET", ""))
-
-	var queueClient queue.Client
-	if projectID == "local-convo-api" || projectID == "" {
-		queueClient = queue.NewLogger()
-	} else {
-		queueClient = queue.NewClient(ctx, projectID)
-	}
+	raven.SetDSN(sc.Get("SENTRY_DSN", ""))
+	raven.SetRelease(envget("GAE_VERSION", "dev"))
 
 	http.Handle("/", handlers.New(&handlers.Config{
-		ModelsClient: models.NewClient(
-			dbClient,
-			ntfClient,
-			search.NewClient(secretsClient.Get("ELASTICSEARCH_HOST", "elasticsearch")),
-			mailClient,
-			queueClient,
-			storageClient,
-			magicClient,
-			secretsClient.Get("SUPPORT_PASSWORD", ""),
-		),
-		DB:            dbClient,
-		PlacesClient:  places.NewClient(secretsClient.Get("GOOGLE_MAPS_API_KEY", "")),
-		NtfClient:     ntfClient,
-		StorageClient: storageClient,
-		MailClient:    mailClient,
-		OAuthClient:   oauthClient,
-		MagicClient:   magicClient,
+		DB:              dbClient,
+		Queue:           getQueueClient(ctx, projectID),
+		Places:          places.NewClient(sc.Get("GOOGLE_MAPS_API_KEY", "")),
+		Ntf:             notifications.NewClient(sc.Get("STREAM_API_KEY", "streamKey"), sc.Get("STREAM_API_SECRET", "streamSecret"), "us-east"),
+		Storage:         storage.NewClient(sc.Get("AVATAR_BUCKET_NAME", ""), sc.Get("PHOTO_BUCKET_NAME", "")),
+		Mail:            mail.NewClient(sc.Get("SENDGRID_API_KEY", "")),
+		OAuthClient:     oauth.NewClient(sc.Get("GOOGLE_OAUTH_KEY", "")),
+		Magic:           magic.NewClient(sc.Get("APP_SECRET", "")),
+		Search:          search.NewClient(sc.Get("ELASTICSEARCH_HOST", "elasticsearch")),
+		SupportPassword: sc.Get("SUPPORT_PASSWORD", ""),
 	}))
 
 	port := os.Getenv("PORT")
@@ -79,6 +52,28 @@ func main() {
 		log.Printf("Defaulting to port %s", port)
 	}
 
+	srv := http.Server{
+		ReadTimeout:  5 * time.Second,
+		WriteTimeout: 30 * time.Second,
+		Addr:         fmt.Sprintf(":%s", port),
+	}
+
 	log.Printf("Listening on port %s", port)
-	log.Fatal(http.ListenAndServe(fmt.Sprintf(":%s", port), nil))
+	log.Fatal(srv.ListenAndServe())
+}
+
+func envget(name, fallback string) string {
+	if val := os.Getenv(name); val != "" {
+		return val
+	}
+
+	return fallback
+}
+
+func getQueueClient(ctx context.Context, projectID string) queue.Client {
+	if projectID == "local-convo-api" || projectID == "" {
+		return queue.NewLogger()
+	}
+
+	return queue.NewClient(ctx, projectID)
 }

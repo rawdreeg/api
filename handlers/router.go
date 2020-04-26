@@ -10,6 +10,8 @@ import (
 	"github.com/hiconvo/api/middleware"
 	"github.com/hiconvo/api/models"
 	"github.com/hiconvo/api/notifications"
+	"github.com/hiconvo/api/queue"
+	"github.com/hiconvo/api/search"
 	"github.com/hiconvo/api/storage"
 	"github.com/hiconvo/api/utils/bjson"
 	"github.com/hiconvo/api/utils/magic"
@@ -18,18 +20,32 @@ import (
 )
 
 type Config struct {
-	DB            db.Client
-	ModelsClient  *models.Client
-	PlacesClient  places.Client
-	NtfClient     notifications.Client
-	StorageClient *storage.Client
-	MailClient    mail.Client
-	OAuthClient   oauth.Client
-	MagicClient   magic.Client
+	DB              db.Client
+	Queue           queue.Client
+	Places          places.Client
+	Ntf             notifications.Client
+	Storage         *storage.Client
+	Mail            mail.Client
+	OAuthClient     oauth.Client
+	Magic           magic.Client
+	Search          search.Client
+	SupportPassword string
+	ModelsClient    *models.Client
 }
 
 // New mounts all of the application's endpoints.
 func New(c *Config) http.Handler {
+	c.ModelsClient = models.NewClient(&models.Config{
+		DB:              c.DB,
+		Queue:           c.Queue,
+		Ntf:             c.Ntf,
+		Storage:         c.Storage,
+		Mail:            c.Mail,
+		Magic:           c.Magic,
+		Search:          c.Search,
+		SupportPassword: c.SupportPassword,
+	})
+
 	router := mux.NewRouter()
 	router.Use(middleware.WithErrorReporting)
 

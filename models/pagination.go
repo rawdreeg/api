@@ -1,9 +1,6 @@
 package models
 
-const (
-	_defaultPageNum = 0
-	_defaultPageSize = 10
-)
+const _defaultPageSize = 10
 
 // Pagination captures all info needed for pagination.
 // If Size is negative, the result is an unlimited size.
@@ -11,7 +8,6 @@ type Pagination struct {
 	Page int
 	Size int
 }
-
 
 func (p *Pagination) getSize() int {
 	size := p.Size

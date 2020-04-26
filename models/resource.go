@@ -15,37 +15,40 @@ import (
 )
 
 type Client struct {
-	db      db.Client            `datastore:"-"`
-	ntf     notifications.Client `datastore:"-"`
-	search  search.Client        `datastore:"-"`
-	mail    mail.Client          `datastore:"-"`
-	queue   queue.Client         `datastore:"-"`
-	storage *storage.Client      `datastore:"-"`
-	magic   magic.Client         `datastore:"-"`
+	db      db.Client
+	ntf     notifications.Client
+	search  search.Client
+	mail    *MailClient
+	queue   queue.Client
+	storage *storage.Client
+	magic   magic.Client
 
 	supportUser    *User
 	welcomeMessage string
 }
 
-func NewClient(
-	dc db.Client,
-	nc notifications.Client,
-	sc search.Client,
-	mc mail.Client,
-	qc queue.Client,
-	sto *storage.Client,
-	mag magic.Client,
-	supportPassword string) *Client {
+type Config struct {
+	DB              db.Client
+	Queue           queue.Client
+	Ntf             notifications.Client
+	Storage         *storage.Client
+	Mail            mail.Client
+	Magic           magic.Client
+	Search          search.Client
+	SupportPassword string
+}
+
+func NewClient(cfg *Config) *Client {
 	c := &Client{
-		db:      dc,
-		ntf:     nc,
-		search:  sc,
-		mail:    mc,
-		queue:   qc,
-		storage: sto,
-		magic:   mag,
+		db:      cfg.DB,
+		ntf:     cfg.Ntf,
+		search:  cfg.Search,
+		mail:    NewMailClient(cfg.Mail, cfg.Magic),
+		queue:   cfg.Queue,
+		storage: cfg.Storage,
+		magic:   cfg.Magic,
 	}
-	c.initSupportUser(supportPassword)
+	c.initSupportUser(cfg.SupportPassword)
 	c.welcomeMessage = readStringFromFile("welcome.md")
 	return c
 }

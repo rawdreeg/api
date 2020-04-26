@@ -7,6 +7,7 @@ import (
 	"cloud.google.com/go/datastore"
 
 	"github.com/hiconvo/api/db"
+	"github.com/hiconvo/api/errors"
 	"github.com/hiconvo/api/log"
 )
 
@@ -25,7 +26,9 @@ func NewClient(ctx context.Context, db db.Client) Client {
 	}
 
 	q := datastore.NewQuery("Secret")
-	db.GetAll(ctx, q, &s)
+	if _, err := db.GetAll(ctx, q, &s); err != nil {
+		panic(errors.E(errors.Op("secrets.NewClient()"), err))
+	}
 
 	secretMap := make(map[string]string, len(s))
 	for i := range s {
@@ -40,12 +43,13 @@ func NewClient(ctx context.Context, db db.Client) Client {
 func (c *clientImpl) Get(id, fallback string) string {
 	s := c.secrets[id]
 	if s == "" {
-		log.Printf("secrets.Get: '%s' is empty, trying to read from environment...\n", id)
 		s = os.Getenv(id)
 	}
+
 	if s == "" {
-		log.Printf("secrets.Get: '%s' is not defined in the environment either, using fallback\n", id)
+		log.Printf("secrets.Get(id=%s): using fallback", id)
 		return fallback
 	}
+
 	return s
 }

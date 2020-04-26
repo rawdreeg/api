@@ -123,7 +123,7 @@ func handleServerErrorResponse(w http.ResponseWriter, err error) {
 }
 
 func (c *Config) sendErrorEmail(email string) {
-	err := c.MailClient.Send(mail.EmailMessage{
+	err := c.Mail.Send(mail.EmailMessage{
 		FromName:    "Convo",
 		FromEmail:   "support@mail.convo.events",
 		ToName:      "",
@@ -139,7 +139,7 @@ func (c *Config) sendErrorEmail(email string) {
 }
 
 func (c *Config) sendTryAgainEmail(email string) {
-	err := c.MailClient.Send(mail.EmailMessage{
+	err := c.Mail.Send(mail.EmailMessage{
 		FromName:    "Convo",
 		FromEmail:   "support@mail.convo.events",
 		ToName:      "",

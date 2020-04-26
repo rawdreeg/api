@@ -69,7 +69,7 @@ func (c *Config) CreateEvent(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	place, err := c.PlacesClient.Resolve(ctx, payload.PlaceID)
+	place, err := c.Places.Resolve(ctx, payload.PlaceID)
 	if err != nil {
 		bjson.HandleError(w, err)
 		return
@@ -236,7 +236,7 @@ func (c *Config) UpdateEvent(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if payload.PlaceID != "" && payload.PlaceID != event.PlaceID {
-		place, err := c.PlacesClient.Resolve(ctx, payload.PlaceID)
+		place, err := c.Places.Resolve(ctx, payload.PlaceID)
 		if err != nil {
 			bjson.HandleError(w, err)
 			return
@@ -266,7 +266,7 @@ func (c *Config) UpdateEvent(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	if err := c.NtfClient.Put(notif.Notification{
+	if err := c.Ntf.Put(notif.Notification{
 		UserKeys:   notif.FilterKey(event.UserKeys, u.Key),
 		Actor:      u.FullName,
 		Verb:       notif.UpdateEvent,
@@ -321,7 +321,7 @@ func (c *Config) DeleteEvent(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		if err := c.NtfClient.Put(notif.Notification{
+		if err := c.Ntf.Put(notif.Notification{
 			UserKeys:   notif.FilterKey(event.UserKeys, u.Key),
 			Actor:      u.FullName,
 			Verb:       notif.DeleteEvent,
@@ -475,7 +475,7 @@ func (c *Config) AddRSVPToEvent(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := c.NtfClient.Put(notif.Notification{
+	if err := c.Ntf.Put(notif.Notification{
 		UserKeys:   []*datastore.Key{event.OwnerKey},
 		Actor:      u.FullName,
 		Verb:       notif.AddRSVP,
@@ -515,7 +515,7 @@ func (c *Config) RemoveRSVPFromEvent(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := c.NtfClient.Put(notif.Notification{
+	if err := c.Ntf.Put(notif.Notification{
 		UserKeys:   []*datastore.Key{event.OwnerKey},
 		Actor:      u.FullName,
 		Verb:       notif.RemoveRSVP,
@@ -565,7 +565,7 @@ func (c *Config) MagicRSVP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := c.MagicClient.Verify(
+	if err := c.Magic.Verify(
 		payload.UserID,
 		payload.Timestamp,
 		strconv.FormatBool(!e.IsInFuture()),
@@ -599,7 +599,7 @@ func (c *Config) MagicRSVP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := c.NtfClient.Put(notif.Notification{
+	if err := c.Ntf.Put(notif.Notification{
 		UserKeys:   []*datastore.Key{e.OwnerKey},
 		Actor:      u.FullName,
 		Verb:       notif.AddRSVP,
@@ -638,7 +638,7 @@ func (c *Config) MagicInvite(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := c.MagicClient.Verify(
+	if err := c.Magic.Verify(
 		payload.EventID,
 		payload.Timestamp,
 		e.Token,
@@ -668,7 +668,7 @@ func (c *Config) MagicInvite(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := c.NtfClient.Put(notif.Notification{
+	if err := c.Ntf.Put(notif.Notification{
 		UserKeys:   []*datastore.Key{e.OwnerKey},
 		Actor:      u.FullName,
 		Verb:       notif.AddRSVP,

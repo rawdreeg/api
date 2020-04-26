@@ -258,7 +258,7 @@ func (t *Thread) Send(ctx context.Context) error {
 		return err
 	}
 
-	return t.client.sendThread(t, messages)
+	return t.client.mail.SendThread(t, messages)
 }
 
 func (t *Thread) SendAsync(ctx context.Context) error {

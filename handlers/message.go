@@ -75,12 +75,12 @@ func (c *Config) AddMessageToThread(w http.ResponseWriter, r *http.Request) {
 	var photoKey string
 	var err error
 	if payload.Blob != "" {
-		photoURL, err := c.StorageClient.PutPhotoFromBlob(ctx, thread.ID, payload.Blob)
+		photoURL, err := c.Storage.PutPhotoFromBlob(ctx, thread.ID, payload.Blob)
 		if err != nil {
 			bjson.HandleError(w, errors.E(op, err))
 			return
 		}
-		photoKey = c.StorageClient.GetKeyFromPhotoURL(photoURL)
+		photoKey = c.Storage.GetKeyFromPhotoURL(photoURL)
 	}
 
 	messageBody := html.UnescapeString(payload.Body)
@@ -135,7 +135,7 @@ func (c *Config) AddMessageToThread(w http.ResponseWriter, r *http.Request) {
 		}
 	} else {
 		// Send a notification for all later responses
-		if err := c.NtfClient.Put(notif.Notification{
+		if err := c.Ntf.Put(notif.Notification{
 			UserKeys:   notif.FilterKey(thread.UserKeys, u.Key),
 			Actor:      u.FullName,
 			Verb:       notif.NewMessage,
@@ -266,12 +266,12 @@ func (c *Config) AddMessageToEvent(w http.ResponseWriter, r *http.Request) {
 	var photoKey string
 	var err error
 	if payload.Blob != "" {
-		photoURL, err := c.StorageClient.PutPhotoFromBlob(ctx, event.ID, payload.Blob)
+		photoURL, err := c.Storage.PutPhotoFromBlob(ctx, event.ID, payload.Blob)
 		if err != nil {
 			bjson.HandleError(w, errors.E(op, err))
 			return
 		}
-		photoKey = c.StorageClient.GetKeyFromPhotoURL(photoURL)
+		photoKey = c.Storage.GetKeyFromPhotoURL(photoURL)
 	}
 
 	message, err := c.ModelsClient.NewEventMessage(
@@ -294,7 +294,7 @@ func (c *Config) AddMessageToEvent(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := c.NtfClient.Put(notif.Notification{
+	if err := c.Ntf.Put(notif.Notification{
 		UserKeys:   notif.FilterKey(event.UserKeys, u.Key),
 		Actor:      u.FullName,
 		Verb:       notif.NewMessage,
@@ -381,7 +381,7 @@ func (c *Config) DeletePhotoFromMessage(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	key := c.StorageClient.GetKeyFromPhotoURL(payload.Key)
+	key := c.Storage.GetKeyFromPhotoURL(payload.Key)
 
 	if !m.HasPhotoKey(key) {
 		bjson.HandleError(w, errors.E(op, errors.Str("no photo in message"), http.StatusBadRequest))

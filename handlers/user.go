@@ -261,7 +261,7 @@ func (c *Config) OAuth(w http.ResponseWriter, r *http.Request) {
 		}
 
 		if u.Avatar == "" {
-			avatarURI, err := c.StorageClient.PutAvatarFromURL(ctx, oauthPayload.TempAvatar)
+			avatarURI, err := c.Storage.PutAvatarFromURL(ctx, oauthPayload.TempAvatar)
 			if err != nil {
 				// Print error but keep going. User might not have a profile pic.
 				log.Alarm(err)
@@ -293,7 +293,7 @@ func (c *Config) OAuth(w http.ResponseWriter, r *http.Request) {
 
 	// Finally at new user case. Cache the avatar from the Oauth payload and
 	// create a new account with the Oauth payload.
-	avatarURI, err := c.StorageClient.PutAvatarFromURL(ctx, oauthPayload.TempAvatar)
+	avatarURI, err := c.Storage.PutAvatarFromURL(ctx, oauthPayload.TempAvatar)
 	if err != nil {
 		// Print error but keep going. User might not have a profile pic.
 		log.Alarm(err)
@@ -396,7 +396,7 @@ func (c *Config) UpdatePassword(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := c.MagicClient.Verify(
+	if err := c.Magic.Verify(
 		payload.UserID,
 		payload.Timestamp,
 		u.PasswordDigest,
@@ -458,7 +458,7 @@ func (c *Config) VerifyEmail(w http.ResponseWriter, r *http.Request) {
 	femail := strings.ToLower(payload.Email)
 	salt := femail + strconv.FormatBool(u.HasEmail(femail))
 
-	if err := c.MagicClient.Verify(
+	if err := c.Magic.Verify(
 		payload.UserID,
 		payload.Timestamp,
 		salt,
@@ -695,13 +695,13 @@ func (c *Config) PutAvatar(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	avatarURL, err := c.StorageClient.PutAvatarFromBlob(
+	avatarURL, err := c.Storage.PutAvatarFromBlob(
 		ctx,
 		payload.Blob,
 		int(payload.Size),
 		int(payload.X),
 		int(payload.Y),
-		c.StorageClient.GetKeyFromAvatarURL(u.Avatar))
+		c.Storage.GetKeyFromAvatarURL(u.Avatar))
 	if err != nil {
 		bjson.HandleError(w, err)
 		return
@@ -743,7 +743,7 @@ func (c *Config) MagicLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := c.MagicClient.Verify(
+	if err := c.Magic.Verify(
 		payload.UserID,
 		payload.Timestamp,
 		u.Token,
