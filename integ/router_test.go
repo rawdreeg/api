@@ -24,7 +24,6 @@ import (
 	og "github.com/hiconvo/api/utils/opengraph"
 	"github.com/hiconvo/api/utils/places"
 	"github.com/hiconvo/api/utils/random"
-	"github.com/hiconvo/api/utils/secrets"
 	"github.com/hiconvo/api/utils/thelpers"
 )
 
@@ -39,18 +38,12 @@ var (
 func TestMain(m *testing.M) {
 	os.Chdir("..")
 
-	ctx := thelpers.CreateTestContext()
-	client := thelpers.CreateTestDatastoreClient(ctx)
-	thelpers.ClearDatastore(ctx, client)
-
-	dbClient := db.NewClient(ctx, "local-convo-api")
-	secretsClient := secrets.NewClient(ctx, dbClient)
-
-	// Set globals to be used by tests below
-	tc = ctx
+	tc = thelpers.CreateTestContext()
+	tclient = thelpers.CreateTestDatastoreClient(tc)
+	thelpers.ClearDatastore(tc, tclient)
 
 	handlerCfg := &handlers.Config{
-		DB:              dbClient,
+		DB:              db.NewClient(tc, "local-convo-api"),
 		Queue:           queue.NewLogger(),
 		Places:          places.NewLogger(),
 		Ntf:             notifications.NewLogger(),
@@ -58,19 +51,17 @@ func TestMain(m *testing.M) {
 		Mail:            mail.NewLogger(),
 		OAuthClient:     oauth.NewClient(""),
 		Magic:           magic.NewClient("testing"),
-		Search:          search.NewClient(secretsClient.Get("ELASTICSEARCH_HOST", "elasticsearch")),
+		Search:          search.NewClient("elasticsearch"),
 		SupportPassword: "supportPassword",
 	}
-	th = handlers.New(handlerCfg)
 
+	th = handlers.New(handlerCfg)
 	modelsClient = handlerCfg.ModelsClient
 	magicClient = handlerCfg.Magic
 
-	tclient = client
-
 	result := m.Run()
 
-	thelpers.ClearDatastore(ctx, client)
+	thelpers.ClearDatastore(tc, tclient)
 
 	os.Exit(result)
 }
