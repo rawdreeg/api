@@ -28,16 +28,17 @@ func Handler(dbClient dbc.Client, searchClient search.Client) http.Handler {
 	})
 }
 
-func NewUser(ctx context.Context, t *testing.T, dbClient dbc.Client, searchClient search.Client) *model.User {
+func NewUser(ctx context.Context, t *testing.T, dbClient dbc.Client, searchClient search.Client) (*model.User, string) {
 	t.Helper()
 
 	email := fake.EmailAddress()
+	pw := fake.SimplePassword()
 
 	u, err := model.NewUserWithPassword(
 		email,
 		fake.FirstName(),
 		fake.LastName(),
-		fake.SimplePassword())
+		pw)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -52,7 +53,7 @@ func NewUser(ctx context.Context, t *testing.T, dbClient dbc.Client, searchClien
 		t.Fatal(err)
 	}
 
-	return u
+	return u, pw
 }
 
 func NewIncompleteUser(ctx context.Context, t *testing.T, dbClient dbc.Client, searchClient search.Client) *model.User {

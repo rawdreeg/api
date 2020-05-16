@@ -12,7 +12,7 @@ import (
 )
 
 func TestCreateUser(t *testing.T) {
-	existingUser := testutil.NewUser(_ctx, t, _dbClient, _searchClient)
+	existingUser, _ := testutil.NewUser(_ctx, t, _dbClient, _searchClient)
 	incompleteUser := testutil.NewIncompleteUser(_ctx, t, _dbClient, _searchClient)
 
 	tests := []struct {
@@ -111,8 +111,80 @@ func TestCreateUser(t *testing.T) {
 	}
 }
 
+func TestAuthenticateUser(t *testing.T) {
+	existingUser, password := testutil.NewUser(_ctx, t, _dbClient, _searchClient)
+
+	tests := []struct {
+		Name         string
+		GivenBody    map[string]interface{}
+		ExpectStatus int
+		ExpectBody   string
+	}{
+		{
+			Name: "success",
+			GivenBody: map[string]interface{}{
+				"email":    existingUser.Email,
+				"password": password,
+			},
+			ExpectStatus: http.StatusOK,
+		},
+		{
+			Name: "invalid password",
+			GivenBody: map[string]interface{}{
+				"email":    existingUser.Email,
+				"password": "123456789",
+			},
+			ExpectStatus: http.StatusBadRequest,
+			ExpectBody:   `{"message":"Invalid credentials"}`,
+		},
+		{
+			Name: "missing password",
+			GivenBody: map[string]interface{}{
+				"email":    existingUser.Email,
+				"password": "",
+			},
+			ExpectStatus: http.StatusBadRequest,
+			ExpectBody:   `{"password":"This field is required"}`,
+		},
+		{
+			Name: "invalid password again",
+			GivenBody: map[string]interface{}{
+				"email":    "santa@northpole.com",
+				"password": "have you been naughty or nice?",
+			},
+			ExpectStatus: http.StatusBadRequest,
+			ExpectBody:   `{"message":"Invalid credentials"}`,
+		},
+	}
+
+	for _, tcase := range tests {
+		t.Run(tcase.Name, func(t *testing.T) {
+			tt := apitest.New(tcase.Name).
+				Handler(_handler).
+				Post("/users/auth").
+				JSON(tcase.GivenBody).
+				Expect(t).
+				Status(tcase.ExpectStatus)
+
+			if tcase.ExpectStatus >= http.StatusBadRequest {
+				tt.Body(tcase.ExpectBody)
+			} else {
+				tt.Assert(jsonpath.Equal("$.id", existingUser.ID))
+				tt.Assert(jsonpath.Equal("$.firstName", existingUser.FirstName))
+				tt.Assert(jsonpath.Equal("$.lastName", existingUser.LastName))
+				tt.Assert(jsonpath.Equal("$.fullName", existingUser.FullName))
+				tt.Assert(jsonpath.Equal("$.token", existingUser.Token))
+				tt.Assert(jsonpath.Equal("$.verified", existingUser.Verified))
+				tt.Assert(jsonpath.Equal("$.email", existingUser.Email))
+			}
+
+			tt.End()
+		})
+	}
+}
+
 func TestGetCurrentUser(t *testing.T) {
-	existingUser := testutil.NewUser(_ctx, t, _dbClient, _searchClient)
+	existingUser, _ := testutil.NewUser(_ctx, t, _dbClient, _searchClient)
 
 	tests := []struct {
 		Name            string
@@ -171,8 +243,8 @@ func TestGetCurrentUser(t *testing.T) {
 }
 
 func TestGetUser(t *testing.T) {
-	existingUser := testutil.NewUser(_ctx, t, _dbClient, _searchClient)
-	user1 := testutil.NewUser(_ctx, t, _dbClient, _searchClient)
+	existingUser, _ := testutil.NewUser(_ctx, t, _dbClient, _searchClient)
+	user1, _ := testutil.NewUser(_ctx, t, _dbClient, _searchClient)
 
 	tests := []struct {
 		Name            string

@@ -293,3 +293,19 @@ func (u *User) DeriveProperties() {
 
 	u.Verified = u.HasEmail(u.Email)
 }
+
+func (u *User) CheckPassword(password string) bool {
+	err := bcrypt.CompareHashAndPassword([]byte(u.PasswordDigest), []byte(password))
+	return err == nil
+}
+
+func (u *User) ChangePassword(password string) bool {
+	hash, err := bcrypt.GenerateFromPassword([]byte(password), 10)
+	if err != nil {
+		return false
+	}
+
+	u.PasswordDigest = string(hash)
+
+	return true
+}

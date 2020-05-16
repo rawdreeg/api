@@ -9,6 +9,7 @@ import (
 	"github.com/hiconvo/api/clients/magic"
 	"github.com/hiconvo/api/errors"
 	"github.com/hiconvo/api/handler/middleware"
+	"github.com/hiconvo/api/log"
 	"github.com/hiconvo/api/mail"
 	"github.com/hiconvo/api/model"
 	"github.com/hiconvo/api/valid"
@@ -24,7 +25,7 @@ func NewHandler(c *Config) *mux.Router {
 	r := mux.NewRouter()
 
 	r.HandleFunc("/users", c.CreateUser).Methods(http.MethodPost)
-	// r.HandleFunc("/users/auth", c.AuthenticateUser).Methods("POST")
+	r.HandleFunc("/users/auth", c.AuthenticateUser).Methods(http.MethodPost)
 	// r.HandleFunc("/users/oauth", c.OAuth).Methods("POST")
 	// r.HandleFunc("/users/password", c.UpdatePassword).Methods("POST")
 	// r.HandleFunc("/users/verify", c.VerifyEmail).Methods("POST")
@@ -134,6 +135,65 @@ func (c *Config) CreateUser(w http.ResponseWriter, r *http.Request) {
 	// TODO: user.Welcome(ctx)
 
 	bjson.WriteJSON(w, user, http.StatusCreated)
+}
+
+type authenticateUserPayload struct {
+	Email    string `validate:"nonzero,regexp=^[a-z0-9._%+\\-]+@[a-z0-9.\\-]+\\.[a-z]+$"`
+	Password string `validate:"nonzero"`
+}
+
+// AuthenticateUser is an endpoint that authenticates a user with a password.
+func (c *Config) AuthenticateUser(w http.ResponseWriter, r *http.Request) {
+	op := errors.Op("handlers.AuthenticateUser")
+	ctx := r.Context()
+
+	var payload authenticateUserPayload
+	if err := bjson.ReadJSON(&payload, r); err != nil {
+		bjson.HandleError(w, err)
+		return
+	}
+
+	if err := valid.Raw(&payload); err != nil {
+		bjson.HandleError(w, err)
+		return
+	}
+
+	u, found, err := c.UserStore.GetUserByEmail(ctx, payload.Email)
+	if err != nil {
+		bjson.HandleError(w, err)
+		return
+	} else if !found {
+		bjson.HandleError(w, errors.E(op,
+			errors.Str("unknown email"),
+			map[string]string{"message": "Invalid credentials"},
+			http.StatusBadRequest))
+		return
+	}
+
+	if u.CheckPassword(payload.Password) {
+		if u.IsLocked {
+			if err := c.Mail.SendVerifyEmail(
+				u, u.Email, u.GetVerifyEmailMagicLink(c.Magic, u.Email)); err != nil {
+				log.Alarm(err)
+			}
+
+			bjson.HandleError(w, errors.E(op,
+				errors.Str("unknown email"),
+				map[string]string{"message": "You must verify your email before you can login"},
+				http.StatusBadRequest))
+
+			return
+		}
+
+		bjson.WriteJSON(w, u, http.StatusOK)
+
+		return
+	}
+
+	bjson.HandleError(w, errors.E(op,
+		errors.Str("invalid password"),
+		map[string]string{"message": "Invalid credentials"},
+		http.StatusBadRequest))
 }
 
 // GetCurrentUser is an endpoint that returns the current user.
