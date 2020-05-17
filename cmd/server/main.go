@@ -14,8 +14,10 @@ import (
 	"github.com/hiconvo/api/clients/magic"
 	sender "github.com/hiconvo/api/clients/mail"
 	"github.com/hiconvo/api/clients/notification"
+	"github.com/hiconvo/api/clients/oauth"
 	"github.com/hiconvo/api/clients/search"
 	"github.com/hiconvo/api/clients/secrets"
+	"github.com/hiconvo/api/clients/storage"
 	"github.com/hiconvo/api/db"
 	"github.com/hiconvo/api/handler"
 	"github.com/hiconvo/api/mail"
@@ -49,11 +51,16 @@ func main() {
 		template.NewClient(),
 	)
 	searchClient := search.NewClient(sc.Get("ELASTICSEARCH_HOST", "elasticsearch"))
+	storageClient := storage.NewClient(
+		sc.Get("AVATAR_BUCKET_NAME", ""),
+		sc.Get("PHOTO_BUCKET_NAME", ""))
 
 	h := handler.New(&handler.Config{
 		UserStore: &db.UserStore{DB: dbClient, Notif: notifClient, Search: searchClient},
 		Mail:      mailClient,
 		Magic:     magic.NewClient(sc.Get("APP_SECRET", "")),
+		OAuth:     oauth.NewClient(sc.Get("GOOGLE_AUD", "")),
+		Storage:   storageClient,
 	})
 
 	srv := http.Server{

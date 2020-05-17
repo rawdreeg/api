@@ -12,6 +12,7 @@ require (
 	github.com/corpix/uarand v0.1.1 // indirect
 	github.com/fatih/structs v1.1.0 // indirect
 	github.com/getsentry/raven-go v0.2.0
+	github.com/gofrs/uuid v3.3.0+incompatible
 	github.com/gorilla/css v1.0.0 // indirect
 	github.com/gorilla/handlers v1.4.2
 	github.com/gorilla/mux v1.7.4
@@ -25,9 +26,11 @@ require (
 	github.com/russross/blackfriday/v2 v2.0.1
 	github.com/sendgrid/rest v2.4.1+incompatible // indirect
 	github.com/sendgrid/sendgrid-go v3.5.0+incompatible
+	github.com/sergi/go-diff v1.1.0 // indirect
 	github.com/ssor/bom v0.0.0-20170718123548-6386211fdfcf // indirect
 	github.com/steinfletcher/apitest v1.4.6
 	github.com/steinfletcher/apitest-jsonpath v1.5.0
+	gocloud.dev v0.19.0
 	golang.org/x/crypto v0.0.0-20191011191535-87dc89f01550
 	google.golang.org/genproto v0.0.0-20200212174721-66ed5ce911ce
 	googlemaps.github.io/maps v1.1.2

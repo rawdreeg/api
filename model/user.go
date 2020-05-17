@@ -309,3 +309,15 @@ func (u *User) ChangePassword(password string) bool {
 
 	return true
 }
+
+func (u *User) MergeWith(ctx context.Context, oldUser *User) error {
+	if u.Key.Incomplete() {
+		return errors.Str("models.MergeWith: user's key is incomplete")
+	}
+
+	if oldUser.Key.Incomplete() {
+		return errors.Str("models.MergeWith: oldUser's key is incomplete")
+	}
+
+	return nil
+}

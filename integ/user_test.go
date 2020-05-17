@@ -300,3 +300,111 @@ func TestGetUser(t *testing.T) {
 		})
 	}
 }
+
+func TestOAuth(t *testing.T) {
+	existingUser1, _ := testutil.NewUser(_ctx, t, _dbClient, _searchClient)
+	existingUser2, _ := testutil.NewUser(_ctx, t, _dbClient, _searchClient)
+	existingUser2.PasswordDigest = ""
+	existingUser2.Verified = false
+	if _, err := _dbClient.Put(_ctx, existingUser2.Key, existingUser2); err != nil {
+		t.Fatal(err)
+	}
+
+	tests := []struct {
+		Name            string
+		GivenBody       string
+		GivenOAuthToken string
+		GivenEmail      string
+		ExpectStatus    int
+		ExpectFirstName string
+		ExpectLastName  string
+		Token           string
+	}{
+		{
+			Name:            "success",
+			GivenOAuthToken: "123",
+			GivenEmail:      "bob.kennedy@whitehouse.gov",
+			GivenBody:       `{"provider": "google", "token": "123"}`,
+			ExpectStatus:    200,
+			ExpectFirstName: "John",
+			ExpectLastName:  "Kennedy",
+		},
+		{
+			Name:            "success",
+			GivenOAuthToken: "123",
+			GivenEmail:      "bob.kennedy@whitehouse.gov",
+			GivenBody:       `{"provider": "google", "token": "123"}`,
+			ExpectStatus:    200,
+			ExpectFirstName: "John",
+			ExpectLastName:  "Kennedy",
+		},
+		{
+			Name:            "success with existing user",
+			GivenOAuthToken: "456",
+			GivenEmail:      existingUser1.Email,
+			GivenBody:       `{"provider": "google", "token": "456"}`,
+			ExpectStatus:    200,
+			ExpectFirstName: existingUser1.FirstName,
+			ExpectLastName:  existingUser1.LastName,
+		},
+		{
+			Name:            "success and merge with existing user",
+			GivenOAuthToken: "789",
+			GivenEmail:      "merge@me.com",
+			GivenBody:       `{"provider": "google", "token": "789"}`,
+			ExpectStatus:    200,
+			ExpectFirstName: existingUser2.FirstName,
+			ExpectLastName:  existingUser2.LastName,
+			Token:           existingUser2.Token,
+		},
+		{
+			Name:            "invalid token",
+			GivenOAuthToken: "789",
+			GivenEmail:      "merge@me.com",
+			GivenBody:       `{"provider": "notvalid", "token": "notvalid"}`,
+			ExpectStatus:    400,
+			Token:           existingUser2.Token,
+		},
+	}
+
+	for _, tcase := range tests {
+		t.Run(tcase.Name, func(t *testing.T) {
+			oauthMock := apitest.NewMock().
+				Get(fmt.Sprintf("https://oauth2.googleapis.com/tokeninfo?id_token=%s", tcase.GivenOAuthToken)).
+				RespondWith().
+				Body(fmt.Sprintf(`{
+					"aud": "",
+					"sub": "%s",
+					"email": "%s",
+					"given_name": "%s",
+					"family_name": "%s",
+					"picture": ""
+				}`, tcase.GivenEmail, tcase.GivenEmail, tcase.ExpectFirstName, tcase.ExpectLastName)).
+				Status(200).
+				End()
+
+			headers := map[string]string{"Content-Type": "application/json"}
+
+			if tcase.Token != "" {
+				headers["Authorization"] = fmt.Sprintf("Bearer %s", tcase.Token)
+			}
+
+			tt := apitest.New("OAuth").
+				Mocks(oauthMock).
+				Handler(_handler).
+				Post("/users/oauth").
+				Headers(headers).
+				Body(tcase.GivenBody).
+				Expect(t).
+				Status(tcase.ExpectStatus)
+			if tcase.ExpectStatus < 300 {
+				tt.Assert(jsonpath.Equal("$.email", tcase.GivenEmail))
+				tt.Assert(jsonpath.Equal("$.firstName", tcase.ExpectFirstName))
+				tt.Assert(jsonpath.Equal("$.lastName", tcase.ExpectLastName))
+			}
+
+			tt.End()
+
+		})
+	}
+}

@@ -2,11 +2,14 @@ package user
 
 import (
 	"net/http"
+	"strings"
 
 	"github.com/gorilla/mux"
 
 	"github.com/hiconvo/api/bjson"
 	"github.com/hiconvo/api/clients/magic"
+	"github.com/hiconvo/api/clients/oauth"
+	"github.com/hiconvo/api/clients/storage"
 	"github.com/hiconvo/api/errors"
 	"github.com/hiconvo/api/handler/middleware"
 	"github.com/hiconvo/api/log"
@@ -19,6 +22,8 @@ type Config struct {
 	UserStore model.UserStore
 	Mail      *mail.Client
 	Magic     magic.Client
+	OA        oauth.Client
+	Storage   *storage.Client
 }
 
 func NewHandler(c *Config) *mux.Router {
@@ -26,7 +31,7 @@ func NewHandler(c *Config) *mux.Router {
 
 	r.HandleFunc("/users", c.CreateUser).Methods(http.MethodPost)
 	r.HandleFunc("/users/auth", c.AuthenticateUser).Methods(http.MethodPost)
-	// r.HandleFunc("/users/oauth", c.OAuth).Methods("POST")
+	r.HandleFunc("/users/oauth", c.OAuth).Methods(http.MethodPost)
 	// r.HandleFunc("/users/password", c.UpdatePassword).Methods("POST")
 	// r.HandleFunc("/users/verify", c.VerifyEmail).Methods("POST")
 	// r.HandleFunc("/users/forgot", c.ForgotPassword).Methods("POST")
@@ -194,6 +199,156 @@ func (c *Config) AuthenticateUser(w http.ResponseWriter, r *http.Request) {
 		errors.Str("invalid password"),
 		map[string]string{"message": "Invalid credentials"},
 		http.StatusBadRequest))
+}
+
+// OAuth is an endpoint that can do four things. It can
+//   1. create a user with oauth based authentication
+//   2. associate an existing user with an oauth token
+//   3. authenticate a user via oauth
+//   4. merge an oauth based account with an unregestered account
+//      that was created as a result of an email-based invitation
+//
+func (c *Config) OAuth(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	var payload oauth.UserPayload
+	if err := bjson.ReadJSON(&payload, r); err != nil {
+		bjson.HandleError(w, err)
+		return
+	}
+
+	if err := valid.Raw(&payload); err != nil {
+		bjson.HandleError(w, err)
+		return
+	}
+
+	oauthPayload, err := c.OA.Verify(ctx, payload)
+	if err != nil {
+		bjson.HandleError(w, err)
+		return
+	}
+
+	// If this request includes a token, then it could be from a user
+	// who RSVP'd and then tried to connect an oauth account. If the
+	// token user is not fully registered, this user was made as a
+	// result of an email-based invitation. In this case, we mark
+	// canMergeTokenUser as true and attempt to merge the token user
+	// into the oauth user if all else goes well below.
+	var (
+		token, includesToken = middleware.GetAuthToken(r.Header)
+		tokenUser            *model.User
+		canMergeTokenUser    bool = false
+	)
+
+	if includesToken {
+		_tokenUser, ok, err := c.UserStore.GetUserByToken(ctx, token)
+
+		if ok && err == nil {
+			canMergeTokenUser = !_tokenUser.Key.Incomplete() && !_tokenUser.IsRegistered()
+			tokenUser = _tokenUser
+		}
+	}
+
+	// Get the user and return if found
+	u, found, err := c.UserStore.GetUserByOAuthID(ctx, oauthPayload.ID, oauthPayload.Provider)
+	if err != nil {
+		bjson.HandleError(w, err)
+		return
+	} else if found {
+		// If the user associated with the token is different from the user
+		// received via oauth, merge the token user into the oauth user.
+		if canMergeTokenUser && u.Token != tokenUser.Token {
+			if err := u.MergeWith(ctx, tokenUser); err != nil {
+				bjson.HandleError(w, err)
+				return
+			}
+		}
+		bjson.WriteJSON(w, u, http.StatusOK)
+		return
+	}
+
+	// This user hasn't used Oauth before. Try to find the user by email.
+	// If found, associate the new token with the existing user.
+	u, found, err = c.UserStore.GetUserByEmail(ctx, oauthPayload.Email)
+	if err != nil {
+		bjson.HandleError(w, err)
+		return
+	} else if found {
+		if oauthPayload.Provider == "google" {
+			u.OAuthGoogleID = oauthPayload.ID
+		} else {
+			u.OAuthFacebookID = oauthPayload.ID
+		}
+
+		// Add missing user data
+		if u.FirstName == "" || u.LastName == "" {
+			u.FirstName = oauthPayload.FirstName
+			u.LastName = oauthPayload.LastName
+			u.FullName = strings.Join([]string{
+				oauthPayload.FirstName,
+				oauthPayload.LastName,
+			}, " ")
+		}
+
+		if u.Avatar == "" {
+			avatarURI, err := c.Storage.PutAvatarFromURL(ctx, oauthPayload.TempAvatar)
+			if err != nil {
+				// Print error but keep going. User might not have a profile pic.
+				log.Alarm(err)
+			}
+			u.Avatar = avatarURI
+		}
+
+		u.AddEmail(oauthPayload.Email)
+		u.DeriveProperties()
+
+		if err := c.UserStore.Commit(ctx, u); err != nil {
+			bjson.HandleError(w, err)
+			return
+		}
+
+		// Same as above:
+		// If the user associated with the token is different from the user
+		// received via oauth, merge the token user into the oauth user.
+		if canMergeTokenUser && u.Token != tokenUser.Token {
+			if err := u.MergeWith(ctx, tokenUser); err != nil {
+				bjson.HandleError(w, err)
+				return
+			}
+		}
+
+		bjson.WriteJSON(w, u, http.StatusOK)
+		return
+	}
+
+	// Finally at new user case. Cache the avatar from the Oauth payload and
+	// create a new account with the Oauth payload.
+	avatarURI, err := c.Storage.PutAvatarFromURL(ctx, oauthPayload.TempAvatar)
+	if err != nil {
+		// Print error but keep going. User might not have a profile pic.
+		log.Alarm(err)
+	}
+
+	u, err = model.NewUserWithOAuth(
+		oauthPayload.Email,
+		oauthPayload.FirstName,
+		oauthPayload.LastName,
+		avatarURI,
+		oauthPayload.Provider,
+		oauthPayload.ID)
+	if err != nil {
+		bjson.HandleError(w, err)
+		return
+	}
+
+	// Save the user and create the welcome convo.
+	if err := c.UserStore.Commit(ctx, u); err != nil {
+		bjson.HandleError(w, err)
+		return
+	}
+	// TODO: user.Welcome(ctx)
+
+	bjson.WriteJSON(w, u, http.StatusOK)
 }
 
 // GetCurrentUser is an endpoint that returns the current user.

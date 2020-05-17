@@ -7,6 +7,8 @@ import (
 
 	"github.com/hiconvo/api/bjson"
 	"github.com/hiconvo/api/clients/magic"
+	"github.com/hiconvo/api/clients/oauth"
+	"github.com/hiconvo/api/clients/storage"
 	"github.com/hiconvo/api/handler/middleware"
 	"github.com/hiconvo/api/handler/user"
 	"github.com/hiconvo/api/mail"
@@ -17,6 +19,8 @@ type Config struct {
 	UserStore model.UserStore
 	Mail      *mail.Client
 	Magic     magic.Client
+	OAuth     oauth.Client
+	Storage   *storage.Client
 }
 
 func New(c *Config) http.Handler {
@@ -30,6 +34,8 @@ func New(c *Config) http.Handler {
 		UserStore: c.UserStore,
 		Mail:      c.Mail,
 		Magic:     c.Magic,
+		OA:        c.OAuth,
+		Storage:   c.Storage,
 	}))
 
 	h := middleware.WithCORS(router)

@@ -12,7 +12,9 @@ import (
 	"github.com/hiconvo/api/clients/magic"
 	sender "github.com/hiconvo/api/clients/mail"
 	"github.com/hiconvo/api/clients/notification"
+	"github.com/hiconvo/api/clients/oauth"
 	"github.com/hiconvo/api/clients/search"
+	"github.com/hiconvo/api/clients/storage"
 	"github.com/hiconvo/api/db"
 	"github.com/hiconvo/api/handler"
 	"github.com/hiconvo/api/mail"
@@ -25,6 +27,8 @@ func Handler(dbClient dbc.Client, searchClient search.Client) http.Handler {
 		UserStore: &db.UserStore{DB: dbClient, Notif: notification.NewLogger(), Search: searchClient},
 		Mail:      mail.New(sender.NewLogger(), template.NewClient()),
 		Magic:     magic.NewClient(""),
+		Storage:   storage.NewClient("", ""),
+		OAuth:     oauth.NewClient(""),
 	})
 }
 
