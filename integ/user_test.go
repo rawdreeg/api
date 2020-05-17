@@ -3,11 +3,13 @@ package handler_test
 import (
 	"fmt"
 	"net/http"
+	"strings"
 	"testing"
 
 	"github.com/steinfletcher/apitest"
 	jsonpath "github.com/steinfletcher/apitest-jsonpath"
 
+	"github.com/hiconvo/api/clients/magic"
 	"github.com/hiconvo/api/testutil"
 )
 
@@ -405,6 +407,94 @@ func TestOAuth(t *testing.T) {
 
 			tt.End()
 
+		})
+	}
+}
+
+func TestUpdatePassword(t *testing.T) {
+	magicClient := magic.NewClient("")
+
+	existingUser1, _ := testutil.NewUser(_ctx, t, _dbClient, _searchClient)
+	link := existingUser1.GetPasswordResetMagicLink(magicClient)
+	split := strings.Split(link, "/")
+	kenc := split[len(split)-3]
+	b64ts := split[len(split)-2]
+	sig := split[len(split)-1]
+
+	existingUser2, _ := testutil.NewUser(_ctx, t, _dbClient, _searchClient)
+	link2 := existingUser2.GetPasswordResetMagicLink(magicClient)
+	split2 := strings.Split(link2, "/")
+	kenc2 := split2[len(split2)-3]
+	b64ts2 := split2[len(split2)-2]
+
+	tests := []struct {
+		Name            string
+		GivenAuthHeader map[string]string
+		GivenBody       map[string]interface{}
+		ExpectStatus    int
+		OutData         map[string]interface{}
+		ExpectBody      string
+	}{
+		{
+			GivenBody: map[string]interface{}{
+				"signature": sig,
+				"timestamp": b64ts,
+				"userID":    kenc,
+				"password":  "12345678",
+			},
+			ExpectStatus: http.StatusOK,
+			OutData: map[string]interface{}{
+				"id":        existingUser1.ID,
+				"firstName": existingUser1.FirstName,
+				"lastName":  existingUser1.LastName,
+				"token":     existingUser1.Token,
+				"verified":  existingUser1.Verified,
+				"email":     existingUser1.Email,
+			},
+		},
+		{
+			GivenBody: map[string]interface{}{
+				"signature": sig,
+				"timestamp": b64ts,
+				"userID":    kenc,
+				"password":  "12345678",
+			},
+			ExpectStatus: http.StatusUnauthorized,
+			ExpectBody:   `{"message":"Unauthorized"}`,
+		},
+		{
+			GivenBody: map[string]interface{}{
+				"signature": "not a valid signature",
+				"timestamp": b64ts2,
+				"userID":    kenc2,
+				"password":  "12345678",
+			},
+			ExpectStatus: http.StatusUnauthorized,
+			ExpectBody:   `{"message":"Unauthorized"}`,
+		},
+	}
+
+	for _, tcase := range tests {
+		t.Run(tcase.Name, func(t *testing.T) {
+			tt := apitest.New(tcase.Name).
+				Handler(_handler).
+				Post("/users/password").
+				JSON(tcase.GivenBody).
+				Expect(t).
+				Status(tcase.ExpectStatus)
+
+			if tcase.ExpectStatus >= http.StatusBadRequest {
+				tt.Body(tcase.ExpectBody)
+			} else {
+				tt.Assert(jsonpath.Equal("$.id", tcase.OutData["id"]))
+				tt.Assert(jsonpath.Equal("$.firstName", tcase.OutData["firstName"]))
+				tt.Assert(jsonpath.Equal("$.lastName", tcase.OutData["lastName"]))
+				tt.Assert(jsonpath.Equal("$.token", tcase.OutData["token"]))
+				tt.Assert(jsonpath.Equal("$.verified", tcase.OutData["verified"]))
+				tt.Assert(jsonpath.Equal("$.email", tcase.OutData["email"]))
+			}
+
+			tt.End()
 		})
 	}
 }

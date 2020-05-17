@@ -32,7 +32,7 @@ func NewHandler(c *Config) *mux.Router {
 	r.HandleFunc("/users", c.CreateUser).Methods(http.MethodPost)
 	r.HandleFunc("/users/auth", c.AuthenticateUser).Methods(http.MethodPost)
 	r.HandleFunc("/users/oauth", c.OAuth).Methods(http.MethodPost)
-	// r.HandleFunc("/users/password", c.UpdatePassword).Methods("POST")
+	r.HandleFunc("/users/password", c.UpdatePassword).Methods(http.MethodPost)
 	// r.HandleFunc("/users/verify", c.VerifyEmail).Methods("POST")
 	// r.HandleFunc("/users/forgot", c.ForgotPassword).Methods("POST")
 	// r.HandleFunc("/users/magic", c.MagicLogin).Methods("POST")
@@ -347,6 +347,66 @@ func (c *Config) OAuth(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// TODO: user.Welcome(ctx)
+
+	bjson.WriteJSON(w, u, http.StatusOK)
+}
+
+type updatePasswordPayload struct {
+	Signature string `validate:"nonzero"`
+	Timestamp string `validate:"nonzero"`
+	UserID    string `validate:"nonzero"`
+	Password  string `validate:"min=8"`
+}
+
+// UpdatePassword updates a user's password.
+func (c *Config) UpdatePassword(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	var payload updatePasswordPayload
+	if err := bjson.ReadJSON(&payload, r); err != nil {
+		bjson.HandleError(w, err)
+		return
+	}
+
+	if err := valid.Raw(&payload); err != nil {
+		bjson.HandleError(w, err)
+		return
+	}
+
+	u, err := c.UserStore.GetUserByID(ctx, payload.UserID)
+	if err != nil {
+		bjson.HandleError(w, errors.E(
+			errors.Op("handlers.UpdatePassword"),
+			err,
+			http.StatusBadRequest))
+
+		return
+	}
+
+	if err := u.VerifyPasswordResetMagicLink(
+		c.Magic,
+		payload.UserID,
+		payload.Timestamp,
+		payload.Signature,
+	); err != nil {
+		bjson.HandleError(w, err)
+		return
+	}
+
+	if err := magic.TooOld(payload.Timestamp); err != nil {
+		bjson.HandleError(w, err)
+		return
+	}
+
+	u.ChangePassword(payload.Password)
+	u.IsLocked = false
+	u.AddEmail(u.Email)
+	u.DeriveProperties()
+
+	if err := c.UserStore.Commit(ctx, u); err != nil {
+		bjson.HandleError(w, err)
+		return
+	}
 
 	bjson.WriteJSON(w, u, http.StatusOK)
 }

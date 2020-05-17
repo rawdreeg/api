@@ -196,6 +196,10 @@ func (u *User) GetPasswordResetMagicLink(m magic.Client) string {
 	return m.NewLink(u.Key, u.PasswordDigest, "reset")
 }
 
+func (u *User) VerifyPasswordResetMagicLink(m magic.Client, id, ts, sig string) error {
+	return m.Verify(id, ts, u.PasswordDigest, sig)
+}
+
 func (u *User) GetVerifyEmailMagicLink(m magic.Client, email string) string {
 	salt := email + strconv.FormatBool(u.HasEmail(email))
 	return m.NewLink(u.Key, salt, "verify/"+email)
