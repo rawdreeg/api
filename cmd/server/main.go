@@ -56,7 +56,7 @@ func main() {
 		sc.Get("PHOTO_BUCKET_NAME", ""))
 
 	h := handler.New(&handler.Config{
-		UserStore: &db.UserStore{DB: dbClient, Notif: notifClient, Search: searchClient},
+		UserStore: &db.UserStore{DB: dbClient, Notif: notifClient, S: searchClient},
 		Mail:      mailClient,
 		Magic:     magic.NewClient(sc.Get("APP_SECRET", "")),
 		OAuth:     oauth.NewClient(sc.Get("GOOGLE_AUD", "")),

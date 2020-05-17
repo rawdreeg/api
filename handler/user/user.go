@@ -29,25 +29,25 @@ type Config struct {
 func NewHandler(c *Config) *mux.Router {
 	r := mux.NewRouter()
 
-	r.HandleFunc("/users", c.CreateUser).Methods(http.MethodPost)
-	r.HandleFunc("/users/auth", c.AuthenticateUser).Methods(http.MethodPost)
-	r.HandleFunc("/users/oauth", c.OAuth).Methods(http.MethodPost)
-	r.HandleFunc("/users/password", c.UpdatePassword).Methods(http.MethodPost)
-	r.HandleFunc("/users/verify", c.VerifyEmail).Methods(http.MethodPost)
-	r.HandleFunc("/users/forgot", c.ForgotPassword).Methods(http.MethodPost)
-	r.HandleFunc("/users/magic", c.MagicLogin).Methods(http.MethodPost)
+	r.HandleFunc("/users", c.CreateUser).Methods("POST")
+	r.HandleFunc("/users/auth", c.AuthenticateUser).Methods("POST")
+	r.HandleFunc("/users/oauth", c.OAuth).Methods("POST")
+	r.HandleFunc("/users/password", c.UpdatePassword).Methods("POST")
+	r.HandleFunc("/users/verify", c.VerifyEmail).Methods("POST")
+	r.HandleFunc("/users/forgot", c.ForgotPassword).Methods("POST")
+	r.HandleFunc("/users/magic", c.MagicLogin).Methods("POST")
 
 	sub := r.NewRoute().Subrouter()
 	sub.Use(middleware.WithUser(c.UserStore))
-	sub.HandleFunc("/users", c.GetCurrentUser).Methods(http.MethodGet)
-	sub.HandleFunc("/users", c.UpdateUser).Methods(http.MethodPatch)
-	// r.HandleFunc("/users/emails", c.AddEmail).Methods("POST")
-	// r.HandleFunc("/users/emails", c.RemoveEmail).Methods("DELETE")
-	// r.HandleFunc("/users/emails", c.MakeEmailPrimary).Methods("PATCH")
-	// r.HandleFunc("/users/resend", c.SendVerifyEmail).Methods("POST")
-	// r.HandleFunc("/users/search", c.UserSearch).Methods("GET")
-	// r.HandleFunc("/users/avatar", c.PutAvatar).Methods("POST")
-	sub.HandleFunc("/users/{userID}", c.GetUser).Methods(http.MethodGet)
+	sub.HandleFunc("/users", c.GetCurrentUser).Methods("GET")
+	sub.HandleFunc("/users", c.UpdateUser).Methods("PATCH")
+	sub.HandleFunc("/users/emails", c.AddEmail).Methods("POST")
+	sub.HandleFunc("/users/emails", c.RemoveEmail).Methods("DELETE")
+	sub.HandleFunc("/users/emails", c.MakeEmailPrimary).Methods("PATCH")
+	sub.HandleFunc("/users/resend", c.SendVerifyEmail).Methods("POST")
+	sub.HandleFunc("/users/search", c.UserSearch).Methods("GET")
+	sub.HandleFunc("/users/avatar", c.PutAvatar).Methods("POST")
+	sub.HandleFunc("/users/{userID}", c.GetUser).Methods("GET")
 
 	return r
 }
@@ -483,7 +483,7 @@ func (c *Config) VerifyEmail(w http.ResponseWriter, r *http.Request) {
 
 	// If there is already an account associated with this email, merge the two accounts.
 	dupUser, found, err := c.UserStore.GetUserByEmail(ctx, payload.Email)
-	if found {
+	if found && !dupUser.Key.Equal(u.Key) {
 		if err := u.MergeWith(ctx, dupUser); err != nil {
 			bjson.HandleError(w, err)
 			return
@@ -631,6 +631,195 @@ func (c *Config) UpdateUser(w http.ResponseWriter, r *http.Request) {
 		u.LastName = payload.LastName
 	}
 
+	if err := c.UserStore.Commit(ctx, u); err != nil {
+		bjson.HandleError(w, err)
+		return
+	}
+
+	bjson.WriteJSON(w, u, http.StatusOK)
+}
+
+// SendVerifyEmail resends the email verification email.
+func (c *Config) SendVerifyEmail(w http.ResponseWriter, r *http.Request) {
+	u := middleware.UserFromContext(r.Context())
+
+	err := c.Mail.SendVerifyEmail(u, u.Email, u.GetVerifyEmailMagicLink(c.Magic, u.Email))
+	if err != nil {
+		bjson.HandleError(w, err)
+		return
+	}
+
+	bjson.WriteJSON(w, u, http.StatusOK)
+}
+
+type addEmailPayload struct {
+	Email string `validate:"nonzero,regexp=^[a-z0-9._%+\\-]+@[a-z0-9.\\-]+\\.[a-z]+$"`
+}
+
+// AddEmail sends a verification email to the given email with a magic link that,
+// when clicked, adds the new email to the user's account.
+func (c *Config) AddEmail(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	u := middleware.UserFromContext(ctx)
+
+	var payload addEmailPayload
+	if err := bjson.ReadJSON(&payload, r); err != nil {
+		bjson.HandleError(w, err)
+		return
+	}
+
+	if err := valid.Raw(&payload); err != nil {
+		bjson.HandleError(w, err)
+		return
+	}
+
+	foundUser, found, err := c.UserStore.GetUserByEmail(ctx, payload.Email)
+	if err != nil {
+		bjson.HandleError(w, err)
+		return
+	}
+
+	if found && foundUser.IsRegistered() {
+		// There's already an account associated with the email that the user
+		// is attempting to add. Send an email to this address with some details
+		// about what's going on.
+		if err := c.Mail.SendMergeAccountsEmail(u, payload.Email,
+			u.GetVerifyEmailMagicLink(c.Magic, payload.Email)); err != nil {
+			bjson.HandleError(w, err)
+			return
+		}
+	} else {
+		if err := c.Mail.SendVerifyEmail(u, payload.Email,
+			u.GetVerifyEmailMagicLink(c.Magic, payload.Email)); err != nil {
+			bjson.HandleError(w, err)
+			return
+		}
+	}
+
+	bjson.WriteJSON(w, u, http.StatusOK)
+}
+
+type removeEmailPayload struct {
+	Email string `validate:"nonzero,regexp=^[a-z0-9._%+\\-]+@[a-z0-9.\\-]+\\.[a-z]+$"`
+}
+
+// RemoveEmail removes the given email from the user's account.
+func (c *Config) RemoveEmail(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	u := middleware.UserFromContext(ctx)
+
+	var payload removeEmailPayload
+	if err := bjson.ReadJSON(&payload, r); err != nil {
+		bjson.HandleError(w, err)
+		return
+	}
+
+	if err := valid.Raw(&payload); err != nil {
+		bjson.HandleError(w, err)
+		return
+	}
+
+	if err := u.RemoveEmail(payload.Email); err != nil {
+		bjson.HandleError(w, err)
+		return
+	}
+
+	if err := c.UserStore.Commit(ctx, u); err != nil {
+		bjson.HandleError(w, err)
+		return
+	}
+
+	bjson.WriteJSON(w, u, http.StatusOK)
+}
+
+type makePrimaryEmailPayload struct {
+	Email string `validate:"nonzero,regexp=^[a-z0-9._%+\\-]+@[a-z0-9.\\-]+\\.[a-z]+$"`
+}
+
+// MakeEmailPrimary removes the given email from the user's account.
+func (c *Config) MakeEmailPrimary(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	u := middleware.UserFromContext(ctx)
+
+	var payload makePrimaryEmailPayload
+	if err := bjson.ReadJSON(&payload, r); err != nil {
+		bjson.HandleError(w, err)
+		return
+	}
+
+	if err := valid.Raw(&payload); err != nil {
+		bjson.HandleError(w, err)
+		return
+	}
+
+	if err := u.MakeEmailPrimary(payload.Email); err != nil {
+		bjson.HandleError(w, err)
+		return
+	}
+
+	if err := c.UserStore.Commit(ctx, u); err != nil {
+		bjson.HandleError(w, err)
+		return
+	}
+
+	bjson.WriteJSON(w, u, http.StatusOK)
+}
+
+// UserSearch returns search results.
+func (c *Config) UserSearch(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	query := r.URL.Query().Get("query")
+	if query == "" {
+		bjson.WriteJSON(w, map[string]string{"message": "query cannot be empty"}, http.StatusBadRequest)
+		return
+	}
+
+	contacts, err := c.UserStore.Search(ctx, query)
+	if err != nil {
+		bjson.HandleError(w, err)
+		return
+	}
+
+	bjson.WriteJSON(w, map[string]interface{}{"users": contacts}, http.StatusOK)
+}
+
+type putAvatarPayload struct {
+	Blob string `validate:"nonzero"`
+	X    float64
+	Y    float64
+	Size float64
+}
+
+// PutAvatar sets the user's avatar to the one given.
+func (c *Config) PutAvatar(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	u := middleware.UserFromContext(ctx)
+
+	var payload putAvatarPayload
+	if err := bjson.ReadJSON(&payload, r); err != nil {
+		bjson.HandleError(w, err)
+		return
+	}
+
+	if err := valid.Raw(&payload); err != nil {
+		bjson.HandleError(w, err)
+		return
+	}
+
+	avatarURL, err := c.Storage.PutAvatarFromBlob(
+		ctx,
+		payload.Blob,
+		int(payload.Size),
+		int(payload.X),
+		int(payload.Y),
+		c.Storage.GetKeyFromAvatarURL(u.Avatar))
+	if err != nil {
+		bjson.HandleError(w, err)
+		return
+	}
+
+	u.Avatar = avatarURL
 	if err := c.UserStore.Commit(ctx, u); err != nil {
 		bjson.HandleError(w, err)
 		return

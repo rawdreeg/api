@@ -2,12 +2,15 @@ package db
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"strings"
 	"time"
 
 	"cloud.google.com/go/datastore"
+	"github.com/olivere/elastic"
+
 	"github.com/hiconvo/api/clients/db"
 	"github.com/hiconvo/api/clients/notification"
 	"github.com/hiconvo/api/clients/search"
@@ -20,9 +23,9 @@ import (
 var _ model.UserStore = (*UserStore)(nil)
 
 type UserStore struct {
-	DB     db.Client
-	Notif  notification.Client
-	Search search.Client
+	DB    db.Client
+	Notif notification.Client
+	S     search.Client
 }
 
 func (s *UserStore) Commit(ctx context.Context, u *model.User) error {
@@ -132,6 +135,38 @@ func (s *UserStore) GetOrCreateUserByEmail(ctx context.Context, email string) (*
 	return u, true, nil
 }
 
+func (s *UserStore) Search(ctx context.Context, query string) ([]*model.UserPartial, error) {
+	skip := 0
+	take := 10
+
+	contacts := make([]*model.UserPartial, 0)
+
+	esQuery := elastic.NewMultiMatchQuery(query, "fullName", "firstName", "lastName").
+		Fuzziness("3").
+		MinimumShouldMatch("0")
+
+	result, err := s.S.Search().
+		Index("users").
+		Query(esQuery).
+		From(skip).Size(take).
+		Do(ctx)
+	if err != nil {
+		return contacts, err
+	}
+
+	for _, hit := range result.Hits.Hits {
+		contact := new(model.UserPartial)
+
+		if err := json.Unmarshal(hit.Source, contact); err != nil {
+			return contacts, err
+		}
+
+		contacts = append(contacts, contact)
+	}
+
+	return contacts, nil
+}
+
 func (s *UserStore) getUserByField(ctx context.Context, field, value string) (*model.User, bool, error) {
 	var (
 		op    = errors.Opf("UserStore.getUserByField(field=%q, value=%q)", field, value)
@@ -165,7 +200,7 @@ func (s *UserStore) getUserByField(ctx context.Context, field, value string) (*m
 
 func (s *UserStore) createOrUpdateSearchIndex(ctx context.Context, u *model.User) {
 	if u.IsRegistered() {
-		_, upsertErr := s.Search.Update().
+		_, upsertErr := s.S.Update().
 			Index("users").
 			Id(u.ID).
 			DocAsUpsert(true).

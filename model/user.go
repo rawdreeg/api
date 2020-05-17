@@ -75,6 +75,7 @@ type UserStore interface {
 	GetUserByOAuthID(ctx context.Context, oauthtoken, provider string) (*User, bool, error)
 	// GetUsersByThread(ctx context.Context, t *Thread) ([]*User, error)
 	GetOrCreateUserByEmail(ctx context.Context, email string) (*User, bool, error)
+	Search(ctx context.Context, query string) ([]*UserPartial, error)
 	Commit(ctx context.Context, u *User) error
 }
 

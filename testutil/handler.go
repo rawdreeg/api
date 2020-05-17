@@ -26,7 +26,7 @@ import (
 
 func Handler(dbClient dbc.Client, searchClient search.Client) http.Handler {
 	return handler.New(&handler.Config{
-		UserStore: &db.UserStore{DB: dbClient, Notif: notification.NewLogger(), Search: searchClient},
+		UserStore: &db.UserStore{DB: dbClient, Notif: notification.NewLogger(), S: searchClient},
 		Mail:      mail.New(sender.NewLogger(), template.NewClient()),
 		Magic:     magic.NewClient(""),
 		Storage:   storage.NewClient("", ""),
@@ -86,7 +86,7 @@ func NewNotifClient(t *testing.T) notification.Client {
 
 func NewUserStore(ctx context.Context, t *testing.T, dbClient dbc.Client, searchClient search.Client) model.UserStore {
 	t.Helper()
-	return &db.UserStore{DB: dbClient, Notif: notification.NewLogger(), Search: searchClient}
+	return &db.UserStore{DB: dbClient, Notif: notification.NewLogger(), S: searchClient}
 }
 
 func NewSearchClient() search.Client {

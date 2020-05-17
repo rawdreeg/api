@@ -83,29 +83,29 @@ func (c *Client) SendVerifyEmail(u *model.User, emailAddress, magicLink string) 
 	return c.mail.Send(email)
 }
 
-//func (c *MailClient) SendMergeAccountsEmail(u *User, emailToMerge, magicLink string) error {
-//	plainText, html, err := template.RenderAdminEmail(template.AdminEmail{
-//		Body:       _tplStrMergeAccounts,
-//		ButtonText: "Verify",
-//		MagicLink:  magicLink,
-//		Fargs:      []interface{}{emailToMerge, u.Email},
-//	})
-//	if err != nil {
-//		return err
-//	}
+func (c *Client) SendMergeAccountsEmail(u *model.User, emailToMerge, magicLink string) error {
+	plainText, html, err := c.tpl.RenderAdminEmail(&template.AdminEmail{
+		Body:       c.tplStrMergeAccounts,
+		ButtonText: "Verify",
+		MagicLink:  magicLink,
+		Fargs:      []interface{}{emailToMerge, u.Email},
+	})
+	if err != nil {
+		return err
+	}
 
-//	email := mail.EmailMessage{
-//		FromName:    _fromName,
-//		FromEmail:   _fromEmail,
-//		ToName:      u.FullName,
-//		ToEmail:     u.Email,
-//		Subject:     "[convo] Verify Email",
-//		TextContent: plainText,
-//		HTMLContent: html,
-//	}
+	email := mail.EmailMessage{
+		FromName:    _fromName,
+		FromEmail:   _fromEmail,
+		ToName:      u.FullName,
+		ToEmail:     u.Email,
+		Subject:     "[convo] Verify Email",
+		TextContent: plainText,
+		HTMLContent: html,
+	}
 
-//	return c.mail.Send(email)
-//}
+	return c.mail.Send(email)
+}
 
 //func (c *MailClient) SendThread(thread *Thread, messages []*Message) error {
 //	if len(messages) == 0 {
