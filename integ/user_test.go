@@ -808,6 +808,7 @@ func TestMagicLogin(t *testing.T) {
 			ExpectStatus: http.StatusUnauthorized,
 		},
 	}
+
 	for _, tcase := range tests {
 		t.Run(tcase.Name, func(t *testing.T) {
 			apitest.New("MagicLogin").
@@ -817,6 +818,60 @@ func TestMagicLogin(t *testing.T) {
 				Expect(t).
 				Status(tcase.ExpectStatus).
 				End()
+		})
+	}
+}
+
+func TestUpdateUser(t *testing.T) {
+	existingUser, _ := testutil.NewUser(_ctx, t, _dbClient, _searchClient)
+
+	tests := []struct {
+		Name            string
+		GivenAuthHeader map[string]string
+		GivenBody       map[string]interface{}
+		ExpectStatus    int
+		OutData         map[string]interface{}
+	}{
+		{
+			GivenAuthHeader: testutil.GetAuthHeader(existingUser.Token),
+			GivenBody: map[string]interface{}{
+				"firstName": "Sir",
+				"lastName":  "Malebranche",
+			},
+			ExpectStatus: http.StatusOK,
+			OutData: map[string]interface{}{
+				"id":        existingUser.ID,
+				"firstName": "Sir",
+				"lastName":  "Malebranche",
+				"token":     existingUser.Token,
+				"verified":  existingUser.Verified,
+				"email":     existingUser.Email,
+			},
+		},
+	}
+
+	for _, tcase := range tests {
+		t.Run(tcase.Name, func(t *testing.T) {
+			tt := apitest.New("UpdateUser").
+				Handler(_handler).
+				Patch("/users").
+				JSON(tcase.GivenBody).
+				Headers(tcase.GivenAuthHeader).
+				Expect(t).
+				Status(tcase.ExpectStatus)
+
+			if tcase.ExpectStatus >= http.StatusBadRequest {
+				// tt.Body(tcase.ExpectBody)
+			} else {
+				tt.Assert(jsonpath.Equal("$.id", tcase.OutData["id"]))
+				tt.Assert(jsonpath.Equal("$.firstName", tcase.OutData["firstName"]))
+				tt.Assert(jsonpath.Equal("$.lastName", tcase.OutData["lastName"]))
+				tt.Assert(jsonpath.Equal("$.token", tcase.OutData["token"]))
+				tt.Assert(jsonpath.Equal("$.verified", tcase.OutData["verified"]))
+				tt.Assert(jsonpath.Equal("$.email", tcase.OutData["email"]))
+			}
+
+			tt.End()
 		})
 	}
 }

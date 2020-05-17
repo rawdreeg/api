@@ -2,6 +2,7 @@ package testutil
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"strings"
 	"testing"
@@ -118,4 +119,8 @@ func GetMagicLinkParts(link string) (string, string, string) {
 	b64ts := split[len(split)-2]
 	sig := split[len(split)-1]
 	return kenc, b64ts, sig
+}
+
+func GetAuthHeader(token string) map[string]string {
+	return map[string]string{"Authorization": fmt.Sprintf("Bearer %s", token)}
 }

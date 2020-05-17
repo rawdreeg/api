@@ -40,7 +40,7 @@ func NewHandler(c *Config) *mux.Router {
 	sub := r.NewRoute().Subrouter()
 	sub.Use(middleware.WithUser(c.UserStore))
 	sub.HandleFunc("/users", c.GetCurrentUser).Methods(http.MethodGet)
-	// r.HandleFunc("/users", c.UpdateUser).Methods("PATCH")
+	sub.HandleFunc("/users", c.UpdateUser).Methods(http.MethodPatch)
 	// r.HandleFunc("/users/emails", c.AddEmail).Methods("POST")
 	// r.HandleFunc("/users/emails", c.RemoveEmail).Methods("DELETE")
 	// r.HandleFunc("/users/emails", c.MakeEmailPrimary).Methods("PATCH")
@@ -584,6 +584,54 @@ func (c *Config) MagicLogin(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := magic.TooOld(payload.Timestamp); err != nil {
+		bjson.HandleError(w, err)
+		return
+	}
+
+	bjson.WriteJSON(w, u, http.StatusOK)
+}
+
+type updateUserPayload struct {
+	FirstName string
+	LastName  string
+	Password  bool
+}
+
+// UpdateUser is an endpoint that can do three things. It can
+//   - update FirstName and LastName fields on a user
+//   - initiate a password update which requires email based validation
+//
+func (c *Config) UpdateUser(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	u := middleware.UserFromContext(ctx)
+
+	var payload updateUserPayload
+	if err := bjson.ReadJSON(&payload, r); err != nil {
+		bjson.HandleError(w, err)
+		return
+	}
+
+	if err := valid.Raw(&payload); err != nil {
+		bjson.HandleError(w, err)
+		return
+	}
+
+	if payload.Password {
+		if err := c.Mail.SendPasswordResetEmail(u,
+			u.GetPasswordResetMagicLink(c.Magic)); err != nil {
+			log.Alarm(err)
+		}
+	}
+
+	if payload.FirstName != "" && payload.FirstName != u.FirstName {
+		u.FirstName = payload.FirstName
+	}
+
+	if payload.LastName != "" && payload.LastName != u.LastName {
+		u.LastName = payload.LastName
+	}
+
+	if err := c.UserStore.Commit(ctx, u); err != nil {
 		bjson.HandleError(w, err)
 		return
 	}
