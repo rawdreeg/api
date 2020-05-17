@@ -890,3 +890,127 @@ func TestUploadAvatar(t *testing.T) {
 		Status(http.StatusOK).
 		End()
 }
+
+func TestAddEmail(t *testing.T) {
+	existingUser, _ := testutil.NewUser(_ctx, t, _dbClient, _searchClient)
+
+	tests := []struct {
+		Name            string
+		GivenAuthHeader map[string]string
+		GivenBody       map[string]interface{}
+		ExpectStatus    int
+	}{
+		{
+			GivenAuthHeader: testutil.GetAuthHeader(existingUser.Token),
+			GivenBody: map[string]interface{}{
+				"email": "somenewemail@mail.com",
+			},
+			ExpectStatus: http.StatusOK,
+		},
+	}
+
+	for _, tcase := range tests {
+		t.Run(tcase.Name, func(t *testing.T) {
+			apitest.New("UpdateUser").
+				Handler(_handler).
+				Post("/users/emails").
+				JSON(tcase.GivenBody).
+				Headers(tcase.GivenAuthHeader).
+				Expect(t).
+				Status(tcase.ExpectStatus).
+				End()
+		})
+	}
+}
+
+func TestRemoveEmail(t *testing.T) {
+	const emailToRemove = "testemailfun@mail.com"
+	existingUser1, _ := testutil.NewUser(_ctx, t, _dbClient, _searchClient)
+	existingUser2, _ := testutil.NewUser(_ctx, t, _dbClient, _searchClient)
+	existingUser2.AddEmail(emailToRemove)
+	_dbClient.Put(_ctx, existingUser2.Key, existingUser2)
+
+	tests := []struct {
+		Name            string
+		GivenAuthHeader map[string]string
+		GivenBody       map[string]interface{}
+		ExpectStatus    int
+	}{
+		{
+			Name:            "cannot remove primary email",
+			GivenAuthHeader: testutil.GetAuthHeader(existingUser1.Token),
+			GivenBody: map[string]interface{}{
+				"email": existingUser1.Email,
+			},
+			ExpectStatus: http.StatusBadRequest,
+		},
+
+		{
+			Name:            "success",
+			GivenAuthHeader: testutil.GetAuthHeader(existingUser2.Token),
+			GivenBody: map[string]interface{}{
+				"email": emailToRemove,
+			},
+			ExpectStatus: http.StatusOK,
+		},
+	}
+
+	for _, tcase := range tests {
+		t.Run(tcase.Name, func(t *testing.T) {
+			apitest.New("UpdateUser").
+				Handler(_handler).
+				Delete("/users/emails").
+				JSON(tcase.GivenBody).
+				Headers(tcase.GivenAuthHeader).
+				Expect(t).
+				Status(tcase.ExpectStatus).
+				End()
+		})
+	}
+}
+
+func TestMakeEmailPrimary(t *testing.T) {
+	const emailToMakePrimary = "myprimary@mail.com"
+	existingUser1, _ := testutil.NewUser(_ctx, t, _dbClient, _searchClient)
+	existingUser2, _ := testutil.NewUser(_ctx, t, _dbClient, _searchClient)
+	existingUser2.AddEmail(emailToMakePrimary)
+	_dbClient.Put(_ctx, existingUser2.Key, existingUser2)
+
+	tests := []struct {
+		Name            string
+		GivenAuthHeader map[string]string
+		GivenBody       map[string]interface{}
+		ExpectStatus    int
+	}{
+		{
+			Name:            "cannot make unverified email primary",
+			GivenAuthHeader: testutil.GetAuthHeader(existingUser1.Token),
+			GivenBody: map[string]interface{}{
+				"email": "nonverifiedemail@mail.com",
+			},
+			ExpectStatus: http.StatusBadRequest,
+		},
+
+		{
+			Name:            "success",
+			GivenAuthHeader: testutil.GetAuthHeader(existingUser2.Token),
+			GivenBody: map[string]interface{}{
+				"email": emailToMakePrimary,
+			},
+			ExpectStatus: http.StatusOK,
+		},
+	}
+
+	for _, tcase := range tests {
+		t.Run(tcase.Name, func(t *testing.T) {
+			apitest.New("UpdateUser").
+				Handler(_handler).
+				Patch("/users/emails").
+				JSON(tcase.GivenBody).
+				Headers(tcase.GivenAuthHeader).
+				Expect(t).
+				Status(tcase.ExpectStatus).
+				End()
+		})
+	}
+}
