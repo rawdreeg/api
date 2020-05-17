@@ -734,3 +734,89 @@ func TestVerifyEmail(t *testing.T) {
 		})
 	}
 }
+
+func TestForgotPassword(t *testing.T) {
+	existingUser, _ := testutil.NewUser(_ctx, t, _dbClient, _searchClient)
+
+	tests := []struct {
+		Name         string
+		GivenBody    map[string]interface{}
+		ExpectStatus int
+		ExpectBody   string
+	}{
+		{
+			GivenBody: map[string]interface{}{
+				"email": existingUser.Email,
+			},
+			ExpectStatus: http.StatusOK,
+			ExpectBody:   `{"message":"Check your email for a link to reset your password"}`,
+		},
+		{
+			GivenBody: map[string]interface{}{
+				"email": "plato@greece.edu",
+			},
+			ExpectStatus: http.StatusOK,
+			ExpectBody:   `{"message":"Check your email for a link to reset your password"}`,
+		},
+		{
+			GivenBody: map[string]interface{}{
+				"email": "asdf",
+			},
+			ExpectStatus: http.StatusBadRequest,
+			ExpectBody:   `{"email":"This is not a valid email"}`,
+		},
+	}
+
+	for _, tcase := range tests {
+		t.Run(tcase.Name, func(t *testing.T) {
+			apitest.New("forgot").
+				Handler(_handler).
+				Post("/users/forgot").
+				JSON(tcase.GivenBody).
+				Expect(t).
+				Status(tcase.ExpectStatus).
+				Body(tcase.ExpectBody).
+				End()
+		})
+	}
+}
+
+func TestMagicLogin(t *testing.T) {
+	magicClient := magic.NewClient("")
+	user, _ := testutil.NewUser(_ctx, t, _dbClient, _searchClient)
+	kenc, b64ts, sig := testutil.GetMagicLinkParts(user.GetMagicLoginMagicLink(magicClient))
+
+	tests := []struct {
+		Name         string
+		GivenBody    string
+		ExpectStatus int
+	}{
+		{
+			GivenBody:    fmt.Sprintf(`{"signature": "%s", "timestamp": "%s", "userId": "%s"}`, sig, b64ts, kenc),
+			ExpectStatus: http.StatusOK,
+		},
+		{
+			GivenBody:    `{}`,
+			ExpectStatus: http.StatusBadRequest,
+		},
+		{
+			GivenBody:    fmt.Sprintf(`{"signature": "random", "timestamp": "%s", "userId": "%s"}`, b64ts, kenc),
+			ExpectStatus: http.StatusUnauthorized,
+		},
+		{
+			GivenBody:    fmt.Sprintf(`{"signature": "%s", "timestamp": "%s", "userId": "nonsense"}`, sig, b64ts),
+			ExpectStatus: http.StatusUnauthorized,
+		},
+	}
+	for _, tcase := range tests {
+		t.Run(tcase.Name, func(t *testing.T) {
+			apitest.New("MagicLogin").
+				Handler(_handler).
+				Post("/users/magic").
+				JSON(tcase.GivenBody).
+				Expect(t).
+				Status(tcase.ExpectStatus).
+				End()
+		})
+	}
+}

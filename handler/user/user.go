@@ -34,8 +34,8 @@ func NewHandler(c *Config) *mux.Router {
 	r.HandleFunc("/users/oauth", c.OAuth).Methods(http.MethodPost)
 	r.HandleFunc("/users/password", c.UpdatePassword).Methods(http.MethodPost)
 	r.HandleFunc("/users/verify", c.VerifyEmail).Methods(http.MethodPost)
-	// r.HandleFunc("/users/forgot", c.ForgotPassword).Methods("POST")
-	// r.HandleFunc("/users/magic", c.MagicLogin).Methods("POST")
+	r.HandleFunc("/users/forgot", c.ForgotPassword).Methods(http.MethodPost)
+	r.HandleFunc("/users/magic", c.MagicLogin).Methods(http.MethodPost)
 
 	sub := r.NewRoute().Subrouter()
 	sub.Use(middleware.WithUser(c.UserStore))
@@ -501,6 +501,89 @@ func (c *Config) VerifyEmail(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := c.UserStore.Commit(ctx, u); err != nil {
+		bjson.HandleError(w, err)
+		return
+	}
+
+	bjson.WriteJSON(w, u, http.StatusOK)
+}
+
+type forgotPasswordPayload struct {
+	Email string `validate:"nonzero,regexp=^[a-z0-9._%+\\-]+@[a-z0-9.\\-]+\\.[a-z]+$"`
+}
+
+// ForgotPassword sends a set password email to the user whose email
+// matches the email given in the payload. If no matching user is found
+// this does nothing.
+func (c *Config) ForgotPassword(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	var payload forgotPasswordPayload
+	if err := bjson.ReadJSON(&payload, r); err != nil {
+		bjson.HandleError(w, err)
+		return
+	}
+
+	if err := valid.Raw(&payload); err != nil {
+		bjson.HandleError(w, err)
+		return
+	}
+
+	u, found, err := c.UserStore.GetUserByEmail(ctx, payload.Email)
+	if err != nil {
+		bjson.HandleError(w, err)
+		return
+	} else if found {
+		if err := c.Mail.SendPasswordResetEmail(u,
+			u.GetPasswordResetMagicLink(c.Magic)); err != nil {
+			log.Alarm(err)
+		}
+	}
+
+	bjson.WriteJSON(w, map[string]string{
+		"message": "Check your email for a link to reset your password",
+	}, http.StatusOK)
+}
+
+type magicLoginPayload struct {
+	Signature string `validate:"nonzero"`
+	Timestamp string `validate:"nonzero"`
+	UserID    string `validate:"nonzero"`
+}
+
+// MagicLogin logs in a user with a signature.
+func (c *Config) MagicLogin(w http.ResponseWriter, r *http.Request) {
+	op := errors.Op("handlers.MagicLogin")
+	ctx := r.Context()
+
+	var payload magicLoginPayload
+	if err := bjson.ReadJSON(&payload, r); err != nil {
+		bjson.HandleError(w, err)
+		return
+	}
+
+	if err := valid.Raw(&payload); err != nil {
+		bjson.HandleError(w, err)
+		return
+	}
+
+	u, err := c.UserStore.GetUserByID(ctx, payload.UserID)
+	if err != nil {
+		bjson.HandleError(w, errors.E(op, err, http.StatusUnauthorized))
+		return
+	}
+
+	if err := u.VerifyMagicLogin(
+		c.Magic,
+		payload.UserID,
+		payload.Timestamp,
+		payload.Signature,
+	); err != nil {
+		bjson.HandleError(w, err)
+		return
+	}
+
+	if err := magic.TooOld(payload.Timestamp); err != nil {
 		bjson.HandleError(w, err)
 		return
 	}

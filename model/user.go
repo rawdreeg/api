@@ -210,6 +210,14 @@ func (u *User) VerifyEmailMagicLink(m magic.Client, email, id, ts, sig string) e
 	return m.Verify(id, ts, salt, sig)
 }
 
+func (u *User) GetMagicLoginMagicLink(m magic.Client) string {
+	return m.NewLink(u.Key, u.Token, "magic")
+}
+
+func (u *User) VerifyMagicLogin(m magic.Client, id, ts, sig string) error {
+	return m.Verify(id, ts, u.Token, sig)
+}
+
 func (u *User) HasEmail(email string) bool {
 	email = strings.ToLower(email)
 
