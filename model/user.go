@@ -205,6 +205,11 @@ func (u *User) GetVerifyEmailMagicLink(m magic.Client, email string) string {
 	return m.NewLink(u.Key, salt, "verify/"+email)
 }
 
+func (u *User) VerifyEmailMagicLink(m magic.Client, email, id, ts, sig string) error {
+	salt := email + strconv.FormatBool(u.HasEmail(email))
+	return m.Verify(id, ts, salt, sig)
+}
+
 func (u *User) HasEmail(email string) bool {
 	email = strings.ToLower(email)
 

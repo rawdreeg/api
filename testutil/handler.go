@@ -3,6 +3,7 @@ package testutil
 import (
 	"context"
 	"net/http"
+	"strings"
 	"testing"
 
 	"cloud.google.com/go/datastore"
@@ -48,7 +49,6 @@ func NewUser(ctx context.Context, t *testing.T, dbClient dbc.Client, searchClien
 	}
 
 	u.Verified = true
-	u.Emails = append(u.Emails, email)
 
 	s := NewUserStore(ctx, t, dbClient, searchClient)
 
@@ -110,4 +110,12 @@ func ClearDB(ctx context.Context, client dbc.Client) {
 			panic(err)
 		}
 	}
+}
+
+func GetMagicLinkParts(link string) (string, string, string) {
+	split := strings.Split(link, "/")
+	kenc := split[len(split)-3]
+	b64ts := split[len(split)-2]
+	sig := split[len(split)-1]
+	return kenc, b64ts, sig
 }

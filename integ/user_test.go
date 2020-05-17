@@ -3,7 +3,6 @@ package handler_test
 import (
 	"fmt"
 	"net/http"
-	"strings"
 	"testing"
 
 	"github.com/steinfletcher/apitest"
@@ -415,17 +414,10 @@ func TestUpdatePassword(t *testing.T) {
 	magicClient := magic.NewClient("")
 
 	existingUser1, _ := testutil.NewUser(_ctx, t, _dbClient, _searchClient)
-	link := existingUser1.GetPasswordResetMagicLink(magicClient)
-	split := strings.Split(link, "/")
-	kenc := split[len(split)-3]
-	b64ts := split[len(split)-2]
-	sig := split[len(split)-1]
+	kenc, b64ts, sig := testutil.GetMagicLinkParts(existingUser1.GetPasswordResetMagicLink(magicClient))
 
 	existingUser2, _ := testutil.NewUser(_ctx, t, _dbClient, _searchClient)
-	link2 := existingUser2.GetPasswordResetMagicLink(magicClient)
-	split2 := strings.Split(link2, "/")
-	kenc2 := split2[len(split2)-3]
-	b64ts2 := split2[len(split2)-2]
+	kenc2, b64ts2, _ := testutil.GetMagicLinkParts(existingUser2.GetPasswordResetMagicLink(magicClient))
 
 	tests := []struct {
 		Name            string
@@ -495,6 +487,250 @@ func TestUpdatePassword(t *testing.T) {
 			}
 
 			tt.End()
+		})
+	}
+}
+
+func TestVerifyEmail(t *testing.T) {
+	magicClient := magic.NewClient("")
+	// Standard case of verifying email after account creation
+	existingUser1, _ := testutil.NewUser(_ctx, t, _dbClient, _searchClient)
+	existingUser1.Emails = []string{}
+	existingUser1.Verified = false
+	_dbClient.Put(_ctx, existingUser1.Key, existingUser1)
+	kenc1, b64ts1, sig1 := testutil.GetMagicLinkParts(existingUser1.GetVerifyEmailMagicLink(magicClient, existingUser1.Email))
+
+	// Bad signature case
+	existingUser2, _ := testutil.NewUser(_ctx, t, _dbClient, _searchClient)
+	kenc2, b64ts2, _ := testutil.GetMagicLinkParts(existingUser2.GetVerifyEmailMagicLink(magicClient, existingUser2.Email))
+
+	// Adding a new email
+	existingUser3, _ := testutil.NewUser(_ctx, t, _dbClient, _searchClient)
+	kenc3, b64ts3, sig3 := testutil.GetMagicLinkParts(existingUser3.GetVerifyEmailMagicLink(magicClient, "new@email.com"))
+
+	// Merging accounts
+	existingUser4, _ := testutil.NewUser(_ctx, t, _dbClient, _searchClient) // User to merge into
+	existingUser5, _ := testutil.NewUser(_ctx, t, _dbClient, _searchClient) // User to be merged
+	// Assign test event, thread, and messages to user to be merged
+	// event := createTestEvent(t, &existingUser2, []*models.User{&existingUser5}, []*models.User{})
+	// eventMessage := createTestEventMessage(t, &existingUser5, event)
+	// thread := createTestThread(t, &existingUser5, []*models.User{&existingUser4, &existingUser3})
+	// threadMessage := createTestThreadMessage(t, &existingUser5, &thread)
+	// Add reference to user to be merged in existingUser2's contacts
+	// existingUser2.AddContact(&existingUser5)
+	// if err := existingUser2.Commit(tc); err != nil {
+	// 	t.Error(err.Error())
+	// }
+	kenc4, b64ts4, sig4 := testutil.GetMagicLinkParts(existingUser4.GetVerifyEmailMagicLink(magicClient, existingUser5.Email))
+
+	tests := []struct {
+		Name            string
+		GivenAuthHeader map[string]string
+		GivenBody       map[string]interface{}
+		ExpectStatus    int
+		OutData         map[string]interface{}
+		ExpectBody      string
+		VerifyFunc      func() bool
+	}{
+		// Standard case
+		{
+			GivenBody: map[string]interface{}{
+				"signature": sig1,
+				"timestamp": b64ts1,
+				"userID":    kenc1,
+				"email":     existingUser1.Email,
+			},
+			ExpectStatus: http.StatusOK,
+			OutData: map[string]interface{}{
+				"id":        existingUser1.ID,
+				"firstName": existingUser1.FirstName,
+				"lastName":  existingUser1.LastName,
+				"token":     existingUser1.Token,
+				"verified":  true,
+				"email":     existingUser1.Email,
+				"emails":    []string{existingUser1.Email},
+			},
+			VerifyFunc: func() bool { return true },
+		},
+
+		// Already used magic link (applying standard case second time)
+		{
+			GivenBody: map[string]interface{}{
+				"signature": sig1,
+				"timestamp": b64ts1,
+				"userID":    kenc1,
+				"email":     existingUser1.Email,
+			},
+			ExpectStatus: http.StatusUnauthorized,
+			ExpectBody:   `{"message":"Unauthorized"}`,
+		},
+
+		// Bad signature
+		{
+			GivenBody: map[string]interface{}{
+				"signature": "not a valid signature",
+				"timestamp": b64ts2,
+				"userID":    kenc2,
+				"email":     existingUser2.Email,
+			},
+			ExpectStatus: http.StatusUnauthorized,
+			ExpectBody:   `{"message":"Unauthorized"}`,
+			VerifyFunc:   func() bool { return true },
+		},
+
+		// Adding an email
+		{
+			GivenBody: map[string]interface{}{
+				"signature": sig3,
+				"timestamp": b64ts3,
+				"userID":    kenc3,
+				"email":     "new@email.com",
+			},
+			ExpectStatus: http.StatusOK,
+			OutData: map[string]interface{}{
+				"id":        existingUser3.ID,
+				"firstName": existingUser3.FirstName,
+				"lastName":  existingUser3.LastName,
+				"token":     existingUser3.Token,
+				"verified":  true,
+				"email":     existingUser3.Email,
+				"emails":    []string{existingUser3.Email, "new@email.com"},
+			},
+			VerifyFunc: func() bool { return true },
+		},
+
+		// Merging accounts
+		{
+			GivenBody: map[string]interface{}{
+				"signature": sig4,
+				"timestamp": b64ts4,
+				"userID":    kenc4,
+				"email":     existingUser5.Email,
+			},
+			ExpectStatus: http.StatusOK,
+			OutData: map[string]interface{}{
+				"id":        existingUser4.ID,
+				"firstName": existingUser4.FirstName,
+				"lastName":  existingUser4.LastName,
+				"token":     existingUser4.Token,
+				"verified":  true,
+				"email":     existingUser4.Email,
+				"emails":    []string{existingUser4.Email, existingUser5.Email},
+			},
+			VerifyFunc: func() bool {
+				// // Make sure that existingUser5 was deleted
+				// _, err := models.GetUserByID(tc, existingUser5.ID)
+				// if err == nil {
+				// 	return false
+				// }
+
+				// // Make sure that existingUser5's events were transfered to
+				// // existingUser4
+				// events, err := models.GetEventsByUser(tc, &existingUser4, &models.Pagination{Size: -1})
+				// if err != nil {
+				// 	return false
+				// }
+
+				// found := false
+				// for i := range events {
+				// 	if events[i].ID == event.ID {
+				// 		found = true
+				// 	}
+				// }
+				// if !found {
+				// 	return false
+				// }
+
+				// // Make sure that existingUser5's threads were transfered to
+				// // existingUser4
+				// threads, err := models.GetThreadsByUser(tc, &existingUser4, &models.Pagination{})
+				// if err != nil {
+				// 	return false
+				// }
+
+				// found = false
+				// for i := range threads {
+				// 	if threads[i].ID == thread.ID {
+				// 		found = true
+				// 	}
+				// }
+				// if !found {
+				// 	return false
+				// }
+
+				// // Make sure that existingUser5's messages were transferred too
+				// messages, err := models.GetUnhydratedMessagesByUser(tc, &existingUser4)
+				// if err != nil {
+				// 	return false
+				// }
+
+				// foundEventMessage := false
+				// fountThreadMessage := false
+				// for i := range messages {
+				// 	if messages[i].Key.Equal(eventMessage.Key) {
+				// 		foundEventMessage = true
+				// 	}
+				// 	if messages[i].Key.Equal(threadMessage.Key) {
+				// 		fountThreadMessage = true
+				// 	}
+				// }
+				// if !foundEventMessage || !fountThreadMessage {
+				// 	return false
+				// }
+
+				// // Make sure that existingUser2's contacts were updated
+				// refreshedExistingUser2, err := models.GetUserByID(tc, existingUser2.ID)
+				// if err != nil {
+				// 	return false
+				// }
+				// contacts, err := models.GetContactsByUser(tc, &refreshedExistingUser2)
+				// if err != nil {
+				// 	return false
+				// }
+
+				// found = false
+				// for i := range contacts {
+				// 	if contacts[i].ID == existingUser4.ID {
+				// 		found = true
+				// 	}
+				// }
+				// if !found {
+				// 	return false
+				// }
+
+				return true
+			},
+		},
+	}
+
+	for _, tcase := range tests {
+		t.Run(tcase.Name, func(t *testing.T) {
+			tt := apitest.New(tcase.Name).
+				Handler(_handler).
+				Post("/users/verify").
+				JSON(tcase.GivenBody).
+				Expect(t).
+				Status(tcase.ExpectStatus)
+
+			if tcase.ExpectStatus >= http.StatusBadRequest {
+				tt.Body(tcase.ExpectBody)
+			} else {
+				tt.Assert(jsonpath.Equal("$.id", tcase.OutData["id"]))
+				tt.Assert(jsonpath.Equal("$.firstName", tcase.OutData["firstName"]))
+				tt.Assert(jsonpath.Equal("$.lastName", tcase.OutData["lastName"]))
+				tt.Assert(jsonpath.Equal("$.token", tcase.OutData["token"]))
+				tt.Assert(jsonpath.Equal("$.verified", tcase.OutData["verified"]))
+				tt.Assert(jsonpath.Equal("$.email", tcase.OutData["email"]))
+				for _, email := range tcase.OutData["emails"].([]string) {
+					tt.Assert(jsonpath.Contains("$.emails", email))
+				}
+			}
+
+			tt.End()
+
+			if tcase.VerifyFunc != nil && !tcase.VerifyFunc() {
+				t.Errorf("Custom verifier failed")
+			}
 		})
 	}
 }

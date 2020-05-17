@@ -33,7 +33,7 @@ func NewHandler(c *Config) *mux.Router {
 	r.HandleFunc("/users/auth", c.AuthenticateUser).Methods(http.MethodPost)
 	r.HandleFunc("/users/oauth", c.OAuth).Methods(http.MethodPost)
 	r.HandleFunc("/users/password", c.UpdatePassword).Methods(http.MethodPost)
-	// r.HandleFunc("/users/verify", c.VerifyEmail).Methods("POST")
+	r.HandleFunc("/users/verify", c.VerifyEmail).Methods(http.MethodPost)
 	// r.HandleFunc("/users/forgot", c.ForgotPassword).Methods("POST")
 	// r.HandleFunc("/users/magic", c.MagicLogin).Methods("POST")
 
@@ -430,4 +430,80 @@ func (c *Config) GetUser(w http.ResponseWriter, r *http.Request) {
 	}
 
 	bjson.WriteJSON(w, model.MapUserToUserPartial(u), http.StatusOK)
+}
+
+type verifyEmailPayload struct {
+	Signature string `validate:"nonzero"`
+	Timestamp string `validate:"nonzero"`
+	UserID    string `validate:"nonzero"`
+	Email     string `validate:"nonzero"`
+}
+
+// VerifyEmail verifies that the user's email is really hers. It is secured
+// with a signature.
+func (c *Config) VerifyEmail(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	var payload verifyEmailPayload
+	if err := bjson.ReadJSON(&payload, r); err != nil {
+		bjson.HandleError(w, err)
+		return
+	}
+
+	if err := valid.Raw(&payload); err != nil {
+		bjson.HandleError(w, err)
+		return
+	}
+
+	u, err := c.UserStore.GetUserByID(ctx, payload.UserID)
+	if err != nil {
+		bjson.HandleError(w, errors.E(
+			errors.Op("handlers.VerifyEmail"),
+			err,
+			http.StatusBadRequest))
+
+		return
+	}
+
+	if err := u.VerifyEmailMagicLink(
+		c.Magic,
+		payload.Email,
+		payload.UserID,
+		payload.Timestamp,
+		payload.Signature,
+	); err != nil {
+		bjson.HandleError(w, err)
+		return
+	}
+
+	if err := magic.TooOld(payload.Timestamp); err != nil {
+		bjson.HandleError(w, err)
+		return
+	}
+
+	// If there is already an account associated with this email, merge the two accounts.
+	dupUser, found, err := c.UserStore.GetUserByEmail(ctx, payload.Email)
+	if found {
+		if err := u.MergeWith(ctx, dupUser); err != nil {
+			bjson.HandleError(w, err)
+			return
+		}
+	} else if err != nil {
+		bjson.HandleError(w, err)
+		return
+	}
+
+	u.AddEmail(payload.Email)
+	u.DeriveProperties()
+
+	if u.Email == payload.Email {
+		u.IsLocked = false
+	}
+
+	if err := c.UserStore.Commit(ctx, u); err != nil {
+		bjson.HandleError(w, err)
+		return
+	}
+
+	bjson.WriteJSON(w, u, http.StatusOK)
 }
