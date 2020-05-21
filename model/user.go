@@ -41,6 +41,11 @@ type User struct {
 	CreatedAt        time.Time        `json:"-"`
 }
 
+type UserInput struct {
+	ID    string `json:"id"`
+	Email string `json:"email"`
+}
+
 type UserPartial struct {
 	ID        string `json:"id"`
 	FirstName string `json:"firstName"`
@@ -68,6 +73,15 @@ func MapUserToUserPartial(u *User) *UserPartial {
 	}
 }
 
+func MapUsersToUserPartials(users []*User) []*UserPartial {
+	ups := make([]*UserPartial, len(users))
+	for i, u := range users {
+		ups[i] = MapUserToUserPartial(u)
+	}
+
+	return ups
+}
+
 type UserStore interface {
 	GetUserByID(ctx context.Context, id string) (*User, error)
 	GetUserByEmail(ctx context.Context, email string) (*User, bool, error)
@@ -75,6 +89,7 @@ type UserStore interface {
 	GetUserByOAuthID(ctx context.Context, oauthtoken, provider string) (*User, bool, error)
 	// GetUsersByThread(ctx context.Context, t *Thread) ([]*User, error)
 	GetOrCreateUserByEmail(ctx context.Context, email string) (*User, bool, error)
+	GetOrCreateUsers(ctx context.Context, users []*UserInput) ([]*User, error)
 	Search(ctx context.Context, query string) ([]*UserPartial, error)
 	Commit(ctx context.Context, u *User) error
 }

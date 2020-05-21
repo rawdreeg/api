@@ -26,11 +26,12 @@ import (
 
 func Handler(dbClient dbc.Client, searchClient search.Client) http.Handler {
 	return handler.New(&handler.Config{
-		UserStore: &db.UserStore{DB: dbClient, Notif: notification.NewLogger(), S: searchClient},
-		Mail:      mail.New(sender.NewLogger(), template.NewClient()),
-		Magic:     magic.NewClient(""),
-		Storage:   storage.NewClient("", ""),
-		OAuth:     oauth.NewClient(""),
+		UserStore:   &db.UserStore{DB: dbClient, Notif: notification.NewLogger(), S: searchClient},
+		ThreadStore: &db.ThreadStore{DB: dbClient},
+		Mail:        mail.New(sender.NewLogger(), template.NewClient()),
+		Magic:       magic.NewClient(""),
+		Storage:     storage.NewClient("", ""),
+		OAuth:       oauth.NewClient(""),
 	})
 }
 

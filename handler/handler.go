@@ -10,17 +10,19 @@ import (
 	"github.com/hiconvo/api/clients/oauth"
 	"github.com/hiconvo/api/clients/storage"
 	"github.com/hiconvo/api/handler/middleware"
+	"github.com/hiconvo/api/handler/thread"
 	"github.com/hiconvo/api/handler/user"
 	"github.com/hiconvo/api/mail"
 	"github.com/hiconvo/api/model"
 )
 
 type Config struct {
-	UserStore model.UserStore
-	Mail      *mail.Client
-	Magic     magic.Client
-	OAuth     oauth.Client
-	Storage   *storage.Client
+	UserStore   model.UserStore
+	ThreadStore model.ThreadStore
+	Mail        *mail.Client
+	Magic       magic.Client
+	OAuth       oauth.Client
+	Storage     *storage.Client
 }
 
 func New(c *Config) http.Handler {
@@ -36,6 +38,13 @@ func New(c *Config) http.Handler {
 		Magic:     c.Magic,
 		OA:        c.OAuth,
 		Storage:   c.Storage,
+	}))
+	router.PathPrefix("/threads").Handler(thread.NewHandler(&thread.Config{
+		UserStore:   c.UserStore,
+		ThreadStore: c.ThreadStore,
+		Mail:        c.Mail,
+		Magic:       c.Magic,
+		Storage:     c.Storage,
 	}))
 
 	h := middleware.WithCORS(router)

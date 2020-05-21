@@ -135,6 +135,110 @@ func (s *UserStore) GetOrCreateUserByEmail(ctx context.Context, email string) (*
 	return u, true, nil
 }
 
+func (s *UserStore) CreateUsersByEmail(ctx context.Context, emails []string) ([]*model.User, error) {
+	var (
+		op                = errors.Op("UserStore.CreateUsersByEmail")
+		users             []*model.User
+		usersToCommit     []*model.User
+		usersToCommitKeys []*datastore.Key
+	)
+
+	for i := range emails {
+		u, created, err := s.GetOrCreateUserByEmail(ctx, emails[i])
+		if err != nil {
+			return nil, errors.E(op, err)
+		}
+
+		if created {
+			usersToCommit = append(usersToCommit, u)
+			usersToCommitKeys = append(usersToCommitKeys, u.Key)
+		} else {
+			users = append(users, u)
+		}
+	}
+
+	keys, err := s.DB.PutMulti(ctx, usersToCommitKeys, usersToCommit)
+	if err != nil {
+		return nil, errors.E(op, err)
+	}
+
+	for i := range keys {
+		usersToCommit[i].Key = keys[i]
+		usersToCommit[i].ID = keys[i].Encode()
+	}
+
+	// TODO: models.UserWelcomeMulti(ctx, usersToCommit)
+
+	users = append(users, usersToCommit...)
+
+	return users, nil
+}
+
+func (s *UserStore) GetOrCreateUsers(ctx context.Context, users []*model.UserInput) ([]*model.User, error) {
+	var (
+		op     = errors.Op("UserStore.GetOrCreateUsers")
+		seen   = make(map[string]struct{}, len(users)+1)
+		emails = make([]string, 0)
+		keys   = make([]*datastore.Key, 0)
+	)
+
+	for _, u := range users {
+		if u.Email != "" {
+			email, err := valid.Email(u.Email)
+			if err != nil {
+				return nil, errors.E(
+					op,
+					err,
+					map[string]string{"user": fmt.Sprintf("%q is not a valid email", u.Email)},
+					http.StatusBadRequest)
+			}
+
+			if _, ok := seen[email]; !ok {
+				seen[email] = struct{}{}
+
+				emails = append(emails, email)
+			}
+
+			continue
+		}
+
+		if _, ok := seen[u.ID]; ok {
+			continue
+		}
+
+		seen[u.ID] = struct{}{}
+
+		key, err := datastore.DecodeKey(u.ID)
+		if err != nil {
+			return nil, errors.E(
+				op,
+				err,
+				map[string]string{"user": "Invalid users"},
+				http.StatusBadRequest)
+		}
+
+		keys = append(keys, key)
+	}
+
+	out := make([]*model.User, len(keys))
+	if err := s.DB.GetMulti(ctx, keys, out); err != nil {
+		return nil, errors.E(
+			op,
+			err,
+			map[string]string{"users": "Invalid users"},
+			http.StatusBadRequest)
+	}
+
+	newUsers, err := s.CreateUsersByEmail(ctx, emails)
+	if err != nil {
+		return nil, errors.E(op, err)
+	}
+
+	out = append(out, newUsers...)
+
+	return out, nil
+}
+
 func (s *UserStore) Search(ctx context.Context, query string) ([]*model.UserPartial, error) {
 	skip := 0
 	take := 10

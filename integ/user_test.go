@@ -911,7 +911,7 @@ func TestAddEmail(t *testing.T) {
 
 	for _, tcase := range tests {
 		t.Run(tcase.Name, func(t *testing.T) {
-			apitest.New("UpdateUser").
+			apitest.New(tcase.Name).
 				Handler(_handler).
 				Post("/users/emails").
 				JSON(tcase.GivenBody).
@@ -957,7 +957,7 @@ func TestRemoveEmail(t *testing.T) {
 
 	for _, tcase := range tests {
 		t.Run(tcase.Name, func(t *testing.T) {
-			apitest.New("UpdateUser").
+			apitest.New(tcase.Name).
 				Handler(_handler).
 				Delete("/users/emails").
 				JSON(tcase.GivenBody).
@@ -1003,7 +1003,7 @@ func TestMakeEmailPrimary(t *testing.T) {
 
 	for _, tcase := range tests {
 		t.Run(tcase.Name, func(t *testing.T) {
-			apitest.New("UpdateUser").
+			apitest.New(tcase.Name).
 				Handler(_handler).
 				Patch("/users/emails").
 				JSON(tcase.GivenBody).
