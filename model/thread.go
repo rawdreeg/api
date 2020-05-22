@@ -2,10 +2,12 @@ package model
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"time"
 
 	"cloud.google.com/go/datastore"
+	"github.com/gosimple/slug"
 
 	"github.com/hiconvo/api/errors"
 )
@@ -143,4 +145,83 @@ func (t *Thread) SetReads(newReads []*Read) {
 
 func (t *Thread) GetKey() *datastore.Key {
 	return t.Key
+}
+
+func (t *Thread) GetName() string {
+	return t.Subject
+}
+
+func (t *Thread) GetEmail() string {
+	slugified := slug.Make(t.Subject)
+	if len(slugified) > 20 {
+		slugified = slugified[:20]
+	}
+	return fmt.Sprintf("%s-%d@mail.convo.events", slugified, t.Key.ID)
+}
+
+func (t *Thread) HasUser(u *User) bool {
+	for _, k := range t.UserKeys {
+		if k.Equal(u.Key) {
+			return true
+		}
+	}
+
+	return false
+}
+
+func (t *Thread) OwnerIs(u *User) bool {
+	return t.OwnerKey.Equal(u.Key)
+}
+
+// AddUser adds a user to the thread.
+func (t *Thread) AddUser(u *User) error {
+	op := errors.Op("thread.AddUser")
+
+	// Cannot add owner or duplicate.
+	if t.OwnerIs(u) || t.HasUser(u) {
+		return errors.E(op,
+			map[string]string{"message": "This user is already a member of this Convo"},
+			http.StatusBadRequest,
+			errors.Str("AlreadyHasUser"))
+	}
+
+	if len(t.UserKeys) >= 11 {
+		return errors.E(op,
+			map[string]string{"message": "This Convo has the maximum number of users"},
+			http.StatusBadRequest,
+			errors.Str("UserCountLimit"))
+	}
+
+	t.UserKeys = append(t.UserKeys, u.Key)
+	t.Users = append(t.Users, u)
+	t.UserPartials = append(t.UserPartials, MapUserToUserPartial(u))
+
+	return nil
+}
+
+func (t *Thread) RemoveUser(u *User) {
+	// Remove from keys.
+	for i, k := range t.UserKeys {
+		if k.Equal(u.Key) {
+			t.UserKeys[i] = t.UserKeys[len(t.UserKeys)-1]
+			t.UserKeys = t.UserKeys[:len(t.UserKeys)-1]
+			break
+		}
+	}
+	// Remove from users.
+	for i, c := range t.Users {
+		if c.ID == u.ID {
+			t.Users[i] = t.Users[len(t.Users)-1]
+			t.Users = t.Users[:len(t.Users)-1]
+			break
+		}
+	}
+	// Remove from contacts.
+	for i, c := range t.UserPartials {
+		if c.ID == u.ID {
+			t.UserPartials[i] = t.UserPartials[len(t.UserPartials)-1]
+			t.UserPartials = t.UserPartials[:len(t.UserPartials)-1]
+			break
+		}
+	}
 }

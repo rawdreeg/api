@@ -9,6 +9,7 @@ import (
 	"github.com/hiconvo/api/bjson"
 	"github.com/hiconvo/api/clients/magic"
 	"github.com/hiconvo/api/clients/storage"
+	"github.com/hiconvo/api/errors"
 	"github.com/hiconvo/api/handler/middleware"
 	"github.com/hiconvo/api/mail"
 	"github.com/hiconvo/api/model"
@@ -30,9 +31,9 @@ func NewHandler(c *Config) *mux.Router {
 	r.HandleFunc("/threads", c.CreateThread).Methods("POST")
 	r.HandleFunc("/threads", c.GetThreads).Methods("GET")
 
-	// s := r.NewRoute().Subrouter()
-	// s.Use(middleware.WithThread())
-	// s.HandleFunc("/threads/{threadID}", c.GetThread).Methods("GET")
+	s := r.NewRoute().Subrouter()
+	s.Use(middleware.WithThread(c.ThreadStore))
+	s.HandleFunc("/threads/{threadID}", c.GetThread).Methods("GET")
 	// s.HandleFunc("/threads/{threadID}", c.DeleteThread).Methods("DELETE")
 	// s.HandleFunc("/threads/{threadID}/messages", c.GetMessagesByThread).Methods("GET")
 	// s.HandleFunc("/threads/{threadID}/reads", c.MarkThreadAsRead).Methods("POST")
@@ -110,4 +111,22 @@ func (c *Config) GetThreads(w http.ResponseWriter, r *http.Request) {
 	}
 
 	bjson.WriteJSON(w, map[string][]*model.Thread{"threads": threads}, http.StatusOK)
+}
+
+// GetThread gets a thread.
+func (c *Config) GetThread(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	u := middleware.UserFromContext(ctx)
+	thread := middleware.ThreadFromContext(ctx)
+
+	if thread.OwnerIs(u) || thread.HasUser(u) {
+		bjson.WriteJSON(w, thread, http.StatusOK)
+		return
+	}
+
+	// Otherwise throw a 404.
+	bjson.HandleError(w, errors.E(
+		errors.Op("handlers.GetThread"),
+		errors.Str("no permission"),
+		http.StatusNotFound))
 }

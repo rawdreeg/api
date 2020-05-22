@@ -140,7 +140,7 @@ func (s *ThreadStore) Delete(ctx context.Context, t *model.Thread) error {
 }
 
 func (s *ThreadStore) handleGetThread(ctx context.Context, key *datastore.Key, t *model.Thread) (*model.Thread, error) {
-	if err := s.DB.Get(ctx, key, &t); err != nil {
+	if err := s.DB.Get(ctx, key, t); err != nil {
 		return t, err
 	}
 

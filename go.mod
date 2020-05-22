@@ -16,7 +16,7 @@ require (
 	github.com/gorilla/css v1.0.0 // indirect
 	github.com/gorilla/handlers v1.4.2
 	github.com/gorilla/mux v1.7.4
-	github.com/gosimple/slug v1.9.0 // indirect
+	github.com/gosimple/slug v1.9.0
 	github.com/icrowley/fake v0.0.0-20180203215853-4178557ae428
 	github.com/jaytaylor/html2text v0.0.0-20200412013138-3577fbdbcff7
 	github.com/microcosm-cc/bluemonday v1.0.2

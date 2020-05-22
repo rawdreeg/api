@@ -8,6 +8,7 @@ import (
 
 	"github.com/getsentry/raven-go"
 	"github.com/gorilla/handlers"
+	"github.com/gorilla/mux"
 
 	"github.com/hiconvo/api/bjson"
 	"github.com/hiconvo/api/errors"
@@ -18,7 +19,7 @@ type contextKey int
 
 const (
 	userKey contextKey = iota
-	// threadKey
+	threadKey
 	// eventKey
 )
 
@@ -94,6 +95,32 @@ func WithUser(s model.UserStore) func(http.Handler) http.Handler {
 			}
 
 			bjson.HandleError(w, errors.E(op, http.StatusUnauthorized, errors.Str("no token")))
+		})
+	}
+}
+
+// ThreadFromContext returns the Thread object that was added to the context via
+// WithThread middleware.
+func ThreadFromContext(ctx context.Context) *model.Thread {
+	return ctx.Value(threadKey).(*model.Thread)
+}
+
+// WithThread adds the thread indicated in the url to the context. If the thread
+// cannot be found, then a 404 response is returned.
+func WithThread(s model.ThreadStore) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			ctx := r.Context()
+			vars := mux.Vars(r)
+			id := vars["threadID"]
+
+			thread, err := s.GetThreadByID(ctx, id)
+			if err != nil {
+				bjson.HandleError(w, errors.E(errors.Op("middleware.WithThread"), http.StatusNotFound, err))
+				return
+			}
+
+			next.ServeHTTP(w, r.WithContext(context.WithValue(ctx, threadKey, thread)))
 		})
 	}
 }
