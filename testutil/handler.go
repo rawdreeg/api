@@ -80,6 +80,30 @@ func NewIncompleteUser(ctx context.Context, t *testing.T, dbClient dbc.Client, s
 	return u
 }
 
+func NewThread(
+	ctx context.Context,
+	t *testing.T,
+	dbClient dbc.Client,
+	owner *model.User,
+	users []*model.User,
+) *model.Thread {
+	t.Helper()
+
+	th, err := model.NewThread(fake.Title(), owner, users)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	s := NewThreadStore(ctx, t, dbClient)
+
+	err = s.Commit(ctx, th)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	return th
+}
+
 func NewNotifClient(t *testing.T) notification.Client {
 	t.Helper()
 	return notification.NewLogger()
@@ -88,6 +112,11 @@ func NewNotifClient(t *testing.T) notification.Client {
 func NewUserStore(ctx context.Context, t *testing.T, dbClient dbc.Client, searchClient search.Client) model.UserStore {
 	t.Helper()
 	return &db.UserStore{DB: dbClient, Notif: notification.NewLogger(), S: searchClient}
+}
+
+func NewThreadStore(ctx context.Context, t *testing.T, dbClient dbc.Client) model.ThreadStore {
+	t.Helper()
+	return &db.ThreadStore{DB: dbClient}
 }
 
 func NewSearchClient() search.Client {

@@ -28,7 +28,7 @@ func NewHandler(c *Config) *mux.Router {
 
 	r.Use(middleware.WithUser(c.UserStore))
 	r.HandleFunc("/threads", c.CreateThread).Methods("POST")
-	// r.HandleFunc("/threads", c.GetThreads).Methods("GET")
+	r.HandleFunc("/threads", c.GetThreads).Methods("GET")
 
 	// s := r.NewRoute().Subrouter()
 	// s.Use(middleware.WithThread())
@@ -95,4 +95,19 @@ func (c *Config) CreateThread(w http.ResponseWriter, r *http.Request) {
 	}
 
 	bjson.WriteJSON(w, thread, http.StatusCreated)
+}
+
+// GetThreads gets the user's threads.
+func (c *Config) GetThreads(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	u := middleware.UserFromContext(ctx)
+	p := model.GetPagination(r)
+
+	threads, err := c.ThreadStore.GetThreadsByUser(ctx, u, p)
+	if err != nil {
+		bjson.HandleError(w, err)
+		return
+	}
+
+	bjson.WriteJSON(w, map[string][]*model.Thread{"threads": threads}, http.StatusOK)
 }

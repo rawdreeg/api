@@ -8,6 +8,7 @@ import (
 	"github.com/steinfletcher/apitest"
 	jsonpath "github.com/steinfletcher/apitest-jsonpath"
 
+	"github.com/hiconvo/api/model"
 	"github.com/hiconvo/api/testutil"
 )
 
@@ -30,7 +31,7 @@ func TestCreateThread(t *testing.T) {
 			GivenBody: map[string]interface{}{
 				"subject": fake.Title(),
 				"users": []map[string]string{
-					map[string]string{
+					{
 						"id": u2.ID,
 					},
 				},
@@ -46,16 +47,16 @@ func TestCreateThread(t *testing.T) {
 			GivenBody: map[string]interface{}{
 				"subject": fake.Title(),
 				"users": []map[string]string{
-					map[string]string{
+					{
 						"id": u2.ID,
 					},
-					map[string]string{
+					{
 						"email": "test@testing.com",
 					},
-					map[string]string{
+					{
 						"email": "test@testing.com",
 					},
-					map[string]string{
+					{
 						"email": "someone@somewhere.com",
 					},
 				},
@@ -71,7 +72,7 @@ func TestCreateThread(t *testing.T) {
 			GivenBody: map[string]interface{}{
 				"subject": fake.Title(),
 				"users": []map[string]string{
-					map[string]string{
+					{
 						"id": "Rudolf Carnap",
 					},
 				},
@@ -84,7 +85,7 @@ func TestCreateThread(t *testing.T) {
 			GivenBody: map[string]interface{}{
 				"subject": fake.Title(),
 				"users": []map[string]string{
-					map[string]string{
+					{
 						"id": u2.ID,
 					},
 				},
@@ -107,6 +108,70 @@ func TestCreateThread(t *testing.T) {
 				tt.Assert(jsonpath.Equal("$.owner.id", tcase.ExpectOwnerID))
 				tt.Assert(jsonpath.Contains("$.users[0].id", tcase.ExpectMemberID))
 				tt.Assert(jsonpath.Len("$.users", tcase.ExpectMembersLen))
+			}
+
+			tt.End()
+		})
+	}
+}
+
+func TestGetThreads(t *testing.T) {
+	owner, _ := testutil.NewUser(_ctx, t, _dbClient, _searchClient)
+	member1, _ := testutil.NewUser(_ctx, t, _dbClient, _searchClient)
+	member2, _ := testutil.NewUser(_ctx, t, _dbClient, _searchClient)
+	nonmember, _ := testutil.NewUser(_ctx, t, _dbClient, _searchClient)
+	thread := testutil.NewThread(_ctx, t, _dbClient, owner, []*model.User{member1, member2})
+
+	tests := []struct {
+		Name          string
+		AuthHeader    map[string]string
+		ExpectStatus  int
+		IsThreadInRes bool
+	}{
+		{
+			AuthHeader:    testutil.GetAuthHeader(owner.Token),
+			ExpectStatus:  http.StatusOK,
+			IsThreadInRes: true,
+		},
+		{
+			AuthHeader:    testutil.GetAuthHeader(member1.Token),
+			ExpectStatus:  http.StatusOK,
+			IsThreadInRes: true,
+		},
+		{
+			AuthHeader:    testutil.GetAuthHeader(member2.Token),
+			ExpectStatus:  http.StatusOK,
+			IsThreadInRes: true,
+		},
+		{
+			AuthHeader:    testutil.GetAuthHeader(nonmember.Token),
+			ExpectStatus:  http.StatusOK,
+			IsThreadInRes: false,
+		},
+		{
+			AuthHeader:    map[string]string{"boop": "beep"},
+			ExpectStatus:  http.StatusUnauthorized,
+			IsThreadInRes: false,
+		},
+	}
+
+	for _, tcase := range tests {
+		t.Run(tcase.Name, func(t *testing.T) {
+			tt := apitest.New(tcase.Name).
+				Handler(_handler).
+				Get("/threads").
+				Headers(tcase.AuthHeader).
+				Expect(t).
+				Status(tcase.ExpectStatus)
+
+			if tcase.IsThreadInRes {
+				tt.Assert(jsonpath.Equal("$.threads[0].id", thread.ID))
+				tt.Assert(jsonpath.Equal("$.threads[0].subject", thread.Subject))
+				tt.Assert(jsonpath.Equal("$.threads[0].owner.id", owner.ID))
+				tt.Assert(jsonpath.Equal("$.threads[0].users[0].id", member1.ID))
+				tt.Assert(jsonpath.Equal("$.threads[0].users[1].id", member2.ID))
+				tt.Assert(jsonpath.NotPresent("$.threads[0].users[0].email"))
+				tt.Assert(jsonpath.NotPresent("$.threads[0].users[1].email"))
 			}
 
 			tt.End()

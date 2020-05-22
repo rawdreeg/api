@@ -1,5 +1,10 @@
 package model
 
+import (
+	"net/http"
+	"strconv"
+)
+
 const (
 	_defaultPageNum  = 0
 	_defaultPageSize = 10
@@ -31,4 +36,10 @@ func (p *Pagination) Offset() int {
 
 func (p *Pagination) Limit() int {
 	return p.getSize()
+}
+
+func GetPagination(r *http.Request) *Pagination {
+	pageNum, _ := strconv.Atoi(r.URL.Query().Get("page"))
+	pageSize, _ := strconv.Atoi(r.URL.Query().Get("size"))
+	return &Pagination{Page: pageNum, Size: pageSize}
 }
