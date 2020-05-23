@@ -34,7 +34,7 @@ func NewHandler(c *Config) *mux.Router {
 	s := r.NewRoute().Subrouter()
 	s.Use(middleware.WithThread(c.ThreadStore))
 	s.HandleFunc("/threads/{threadID}", c.GetThread).Methods("GET")
-	// s.HandleFunc("/threads/{threadID}", c.DeleteThread).Methods("DELETE")
+	s.HandleFunc("/threads/{threadID}", c.DeleteThread).Methods("DELETE")
 	// s.HandleFunc("/threads/{threadID}/messages", c.GetMessagesByThread).Methods("GET")
 	// s.HandleFunc("/threads/{threadID}/reads", c.MarkThreadAsRead).Methods("POST")
 
@@ -129,4 +129,28 @@ func (c *Config) GetThread(w http.ResponseWriter, r *http.Request) {
 		errors.Op("handlers.GetThread"),
 		errors.Str("no permission"),
 		http.StatusNotFound))
+}
+
+// DeleteThread allows the owner to delete the thread.
+func (c *Config) DeleteThread(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	u := middleware.UserFromContext(ctx)
+	thread := middleware.ThreadFromContext(ctx)
+
+	// If the requestor is not the owner, throw an error
+	if !thread.OwnerIs(u) {
+		bjson.HandleError(w, errors.E(
+			errors.Op("handlers.DeleteThread"),
+			errors.Str("no permission"),
+			http.StatusNotFound))
+
+		return
+	}
+
+	if err := c.ThreadStore.Delete(ctx, thread); err != nil {
+		bjson.HandleError(w, err)
+		return
+	}
+
+	bjson.WriteJSON(w, thread, http.StatusOK)
 }

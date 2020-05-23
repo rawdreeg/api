@@ -5,9 +5,11 @@ import (
 	"net/http"
 	"testing"
 
+	"cloud.google.com/go/datastore"
 	"github.com/icrowley/fake"
 	"github.com/steinfletcher/apitest"
 	jsonpath "github.com/steinfletcher/apitest-jsonpath"
+	"github.com/stretchr/testify/assert"
 
 	"github.com/hiconvo/api/model"
 	"github.com/hiconvo/api/testutil"
@@ -230,4 +232,70 @@ func TestGetThread(t *testing.T) {
 			tt.End()
 		})
 	}
+}
+
+func TestDeleteThread(t *testing.T) {
+	owner, _ := testutil.NewUser(_ctx, t, _dbClient, _searchClient)
+	member, _ := testutil.NewUser(_ctx, t, _dbClient, _searchClient)
+	nonmember, _ := testutil.NewUser(_ctx, t, _dbClient, _searchClient)
+	thread := testutil.NewThread(_ctx, t, _dbClient, owner, []*model.User{member})
+	url := fmt.Sprintf("/threads/%s", thread.ID)
+
+	tests := []struct {
+		Name         string
+		AuthHeader   map[string]string
+		ExpectStatus int
+		ShouldPass   bool
+	}{
+		{
+			Name:         "member attempt",
+			AuthHeader:   testutil.GetAuthHeader(member.Token),
+			ExpectStatus: http.StatusNotFound,
+			ShouldPass:   false,
+		},
+		{
+			Name:         "nonmember attempt",
+			AuthHeader:   testutil.GetAuthHeader(nonmember.Token),
+			ExpectStatus: http.StatusNotFound,
+			ShouldPass:   false,
+		},
+		{
+			Name:         "invalid header",
+			AuthHeader:   map[string]string{"boop": "beep"},
+			ExpectStatus: http.StatusUnauthorized,
+			ShouldPass:   false,
+		},
+		{
+			Name:         "success",
+			AuthHeader:   testutil.GetAuthHeader(owner.Token),
+			ExpectStatus: http.StatusOK,
+			ShouldPass:   true,
+		},
+		{
+			Name:         "after success",
+			AuthHeader:   testutil.GetAuthHeader(owner.Token),
+			ExpectStatus: http.StatusNotFound,
+			ShouldPass:   true,
+		},
+	}
+
+	for _, tcase := range tests {
+		t.Run(tcase.Name, func(t *testing.T) {
+			apitest.New(tcase.Name).
+				Handler(_handler).
+				Delete(url).
+				Header("Content-Type", "application/json").
+				Headers(tcase.AuthHeader).
+				Expect(t).
+				Status(tcase.ExpectStatus).
+				End()
+
+			if tcase.ShouldPass {
+				var gotThread model.Thread
+				err := _dbClient.Get(_ctx, thread.Key, &gotThread)
+				assert.Equal(t, datastore.ErrNoSuchEntity, err)
+			}
+		})
+	}
+
 }

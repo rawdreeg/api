@@ -36,7 +36,11 @@ func (s *ThreadStore) GetThreadByInt64ID(ctx context.Context, id int64) (*model.
 	return s.handleGetThread(ctx, key, t)
 }
 
-func (s *ThreadStore) GetUnhydratedThreadsByUser(ctx context.Context, u *model.User, p *model.Pagination) ([]*model.Thread, error) {
+func (s *ThreadStore) GetUnhydratedThreadsByUser(
+	ctx context.Context,
+	u *model.User,
+	p *model.Pagination,
+) ([]*model.Thread, error) {
 	var threads []*model.Thread
 
 	q := datastore.NewQuery("Thread").

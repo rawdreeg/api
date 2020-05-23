@@ -96,6 +96,20 @@ func (s *MessageStore) Commit(ctx context.Context, m *model.Message) error {
 	return nil
 }
 
+func (s *MessageStore) CommitMulti(ctx context.Context, messages []*model.Message) error {
+	keys := make([]*datastore.Key, len(messages))
+	for i := range messages {
+		keys[i] = messages[i].Key
+	}
+
+	_, err := s.DB.PutMulti(ctx, keys, messages)
+	if err != nil {
+		return errors.E(errors.Op("MessageStore.CommitMulti"), err)
+	}
+
+	return nil
+}
+
 func (s *MessageStore) Delete(ctx context.Context, m *model.Message) error {
 	if err := s.DB.Delete(ctx, m.Key); err != nil {
 		return err

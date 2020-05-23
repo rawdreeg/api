@@ -32,6 +32,7 @@ require (
 	github.com/ssor/bom v0.0.0-20170718123548-6386211fdfcf // indirect
 	github.com/steinfletcher/apitest v1.4.6
 	github.com/steinfletcher/apitest-jsonpath v1.5.0
+	github.com/stretchr/testify v1.5.1
 	gocloud.dev v0.19.0
 	golang.org/x/crypto v0.0.0-20191011191535-87dc89f01550
 	google.golang.org/genproto v0.0.0-20200212174721-66ed5ce911ce
