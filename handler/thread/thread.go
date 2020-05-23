@@ -17,11 +17,12 @@ import (
 )
 
 type Config struct {
-	UserStore   model.UserStore
-	ThreadStore model.ThreadStore
-	Mail        *mail.Client
-	Magic       magic.Client
-	Storage     *storage.Client
+	UserStore    model.UserStore
+	ThreadStore  model.ThreadStore
+	MessageStore model.MessageStore
+	Mail         *mail.Client
+	Magic        magic.Client
+	Storage      *storage.Client
 }
 
 func NewHandler(c *Config) *mux.Router {
@@ -35,7 +36,7 @@ func NewHandler(c *Config) *mux.Router {
 	s.Use(middleware.WithThread(c.ThreadStore))
 	s.HandleFunc("/threads/{threadID}", c.GetThread).Methods("GET")
 	s.HandleFunc("/threads/{threadID}", c.DeleteThread).Methods("DELETE")
-	// s.HandleFunc("/threads/{threadID}/messages", c.GetMessagesByThread).Methods("GET")
+	s.HandleFunc("/threads/{threadID}/messages", c.GetMessagesByThread).Methods("GET")
 	// s.HandleFunc("/threads/{threadID}/reads", c.MarkThreadAsRead).Methods("POST")
 
 	// t := r.NewRoute().Subrouter()
@@ -153,4 +154,28 @@ func (c *Config) DeleteThread(w http.ResponseWriter, r *http.Request) {
 	}
 
 	bjson.WriteJSON(w, thread, http.StatusOK)
+}
+
+// GetMessagesByThread gets the messages from the given thread.
+func (c *Config) GetMessagesByThread(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	u := middleware.UserFromContext(ctx)
+	thread := middleware.ThreadFromContext(ctx)
+
+	if !(thread.OwnerIs(u) || thread.HasUser(u)) {
+		bjson.HandleError(w, errors.E(
+			errors.Op("handlers.GetMessagesByThread"),
+			errors.Str("no permission"),
+			http.StatusNotFound))
+
+		return
+	}
+
+	messages, err := c.MessageStore.GetMessagesByThread(ctx, thread)
+	if err != nil {
+		bjson.HandleError(w, err)
+		return
+	}
+
+	bjson.WriteJSON(w, map[string][]*model.Message{"messages": messages}, http.StatusOK)
 }

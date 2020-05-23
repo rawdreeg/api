@@ -299,3 +299,61 @@ func TestDeleteThread(t *testing.T) {
 	}
 
 }
+
+func TestGetMessagesByThread(t *testing.T) {
+	owner, _ := testutil.NewUser(_ctx, t, _dbClient, _searchClient)
+	member1, _ := testutil.NewUser(_ctx, t, _dbClient, _searchClient)
+	member2, _ := testutil.NewUser(_ctx, t, _dbClient, _searchClient)
+	nonmember, _ := testutil.NewUser(_ctx, t, _dbClient, _searchClient)
+	thread := testutil.NewThread(_ctx, t, _dbClient, owner, []*model.User{member1, member2})
+	message1 := testutil.NewThreadMessage(_ctx, t, _dbClient, owner, thread)
+	message2 := testutil.NewThreadMessage(_ctx, t, _dbClient, member1, thread)
+	url := fmt.Sprintf("/threads/%s/messages", thread.ID)
+
+	tests := []struct {
+		Name         string
+		AuthHeader   map[string]string
+		ExpectStatus int
+	}{
+		{
+			Name:         "Owner can get messages",
+			AuthHeader:   testutil.GetAuthHeader(owner.Token),
+			ExpectStatus: http.StatusOK,
+		},
+		{
+			Name:         "Member can get messages",
+			AuthHeader:   testutil.GetAuthHeader(member1.Token),
+			ExpectStatus: http.StatusOK,
+		},
+		{
+			Name:         "NonMember cannot get messages",
+			AuthHeader:   testutil.GetAuthHeader(nonmember.Token),
+			ExpectStatus: http.StatusNotFound,
+		},
+		{
+			Name:         "Unauthenticated user cannot get messages",
+			AuthHeader:   map[string]string{"boop": "beep"},
+			ExpectStatus: http.StatusUnauthorized,
+		},
+	}
+
+	for _, tcase := range tests {
+		t.Run(tcase.Name, func(t *testing.T) {
+			tt := apitest.New(tcase.Name).
+				Handler(_handler).
+				Get(url).
+				Headers(tcase.AuthHeader).
+				Expect(t).
+				Status(tcase.ExpectStatus)
+
+			if tcase.ExpectStatus < http.StatusBadRequest {
+				tt.Assert(jsonpath.Equal("$.messages[0].id", message1.ID))
+				tt.Assert(jsonpath.Equal("$.messages[0].body", message1.Body))
+				tt.Assert(jsonpath.Equal("$.messages[1].id", message2.ID))
+				tt.Assert(jsonpath.Equal("$.messages[1].body", message2.Body))
+			}
+
+			tt.End()
+		})
+	}
+}

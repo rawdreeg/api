@@ -225,3 +225,8 @@ func (t *Thread) RemoveUser(u *User) {
 		}
 	}
 }
+
+func (t *Thread) IncRespCount() error {
+	t.ResponseCount++
+	return nil
+}

@@ -2,6 +2,8 @@ package model
 
 import (
 	"context"
+	"fmt"
+	"strings"
 	"time"
 
 	"cloud.google.com/go/datastore"
@@ -34,6 +36,37 @@ type MessageStore interface {
 	Commit(ctx context.Context, t *Message) error
 	CommitMulti(ctx context.Context, messages []*Message) error
 	Delete(ctx context.Context, t *Message) error
+}
+
+func NewThreadMessage(u *User, t *Thread, body, photoKey string, link *og.LinkData) (*Message, error) {
+	ts := time.Now()
+
+	message := Message{
+		Key:       datastore.IncompleteKey("Message", nil),
+		UserKey:   u.Key,
+		User:      MapUserToUserPartial(u),
+		ParentKey: t.Key,
+		ParentID:  t.ID,
+		Body:      removeLink(body, link),
+		Timestamp: ts,
+		Link:      link,
+	}
+
+	if photoKey != "" {
+		message.PhotoKeys = []string{photoKey}
+		message.Photos = []string{photoKey}
+	}
+
+	if t.Preview == nil {
+		t.Preview = &message
+	}
+
+	t.IncRespCount()
+
+	ClearReads(t)
+	MarkAsRead(t, u.Key)
+
+	return &message, nil
 }
 
 func (m *Message) LoadKey(k *datastore.Key) error {
@@ -148,4 +181,18 @@ func MarkMessagesAsRead(
 	}
 
 	return nil
+}
+
+func removeLink(body string, linkPtr *og.LinkData) string {
+	if linkPtr == nil {
+		return body
+	}
+
+	// If this is a markdown formatted link, leave it. Otherwise, remove the link.
+	// This isn't a perfect test, but it gets the job done and I'm lazy.
+	if strings.Contains(body, fmt.Sprintf("[%s]", linkPtr.URL)) {
+		return body
+	}
+
+	return strings.Replace(body, linkPtr.URL, "", 1)
 }

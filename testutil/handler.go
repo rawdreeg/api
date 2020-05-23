@@ -26,12 +26,13 @@ import (
 
 func Handler(dbClient dbc.Client, searchClient search.Client) http.Handler {
 	return handler.New(&handler.Config{
-		UserStore:   &db.UserStore{DB: dbClient, Notif: notification.NewLogger(), S: searchClient},
-		ThreadStore: &db.ThreadStore{DB: dbClient},
-		Mail:        mail.New(sender.NewLogger(), template.NewClient()),
-		Magic:       magic.NewClient(""),
-		Storage:     storage.NewClient("", ""),
-		OAuth:       oauth.NewClient(""),
+		UserStore:    &db.UserStore{DB: dbClient, Notif: notification.NewLogger(), S: searchClient},
+		ThreadStore:  &db.ThreadStore{DB: dbClient},
+		MessageStore: &db.MessageStore{DB: dbClient},
+		Mail:         mail.New(sender.NewLogger(), template.NewClient()),
+		Magic:        magic.NewClient(""),
+		Storage:      storage.NewClient("", ""),
+		OAuth:        oauth.NewClient(""),
 	})
 }
 
@@ -104,6 +105,30 @@ func NewThread(
 	return th
 }
 
+func NewThreadMessage(
+	ctx context.Context,
+	t *testing.T,
+	dbClient dbc.Client,
+	owner *model.User,
+	thread *model.Thread,
+) *model.Message {
+	t.Helper()
+
+	m, err := model.NewThreadMessage(owner, thread, fake.Paragraph(), "", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	s := NewMessageStore(ctx, t, dbClient)
+
+	err = s.Commit(ctx, m)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	return m
+}
+
 func NewNotifClient(t *testing.T) notification.Client {
 	t.Helper()
 	return notification.NewLogger()
@@ -117,6 +142,11 @@ func NewUserStore(ctx context.Context, t *testing.T, dbClient dbc.Client, search
 func NewThreadStore(ctx context.Context, t *testing.T, dbClient dbc.Client) model.ThreadStore {
 	t.Helper()
 	return &db.ThreadStore{DB: dbClient}
+}
+
+func NewMessageStore(ctx context.Context, t *testing.T, dbClient dbc.Client) model.MessageStore {
+	t.Helper()
+	return &db.MessageStore{DB: dbClient}
 }
 
 func NewSearchClient() search.Client {

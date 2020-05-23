@@ -18,8 +18,10 @@ type MessageStore struct {
 }
 
 func (s *MessageStore) GetMessageByID(ctx context.Context, id string) (*model.Message, error) {
-	var op errors.Op = "models.GetMessageByID"
-	var message = new(model.Message)
+	var (
+		op      = errors.Opf("models.GetMessageByID(id=%q)", id)
+		message = new(model.Message)
+	)
 
 	key, err := datastore.DecodeKey(id)
 	if err != nil {
