@@ -37,7 +37,7 @@ func NewHandler(c *Config) *mux.Router {
 	s.HandleFunc("/threads/{threadID}", c.GetThread).Methods("GET")
 	s.HandleFunc("/threads/{threadID}", c.DeleteThread).Methods("DELETE")
 	s.HandleFunc("/threads/{threadID}/messages", c.GetMessagesByThread).Methods("GET")
-	// s.HandleFunc("/threads/{threadID}/reads", c.MarkThreadAsRead).Methods("POST")
+	s.HandleFunc("/threads/{threadID}/reads", c.MarkThreadAsRead).Methods("POST")
 
 	// t := r.NewRoute().Subrouter()
 	// t.Use(db.WithTransaction())
@@ -178,4 +178,34 @@ func (c *Config) GetMessagesByThread(w http.ResponseWriter, r *http.Request) {
 	}
 
 	bjson.WriteJSON(w, map[string][]*model.Message{"messages": messages}, http.StatusOK)
+}
+
+func (c *Config) MarkThreadAsRead(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	user := middleware.UserFromContext(ctx)
+	thread := middleware.ThreadFromContext(ctx)
+
+	if !(thread.OwnerIs(user) || thread.HasUser(user)) {
+		bjson.HandleError(w, errors.E(
+			errors.Op("handlers.MarkThreadAsRead"),
+			errors.Str("no permission"),
+			http.StatusNotFound))
+
+		return
+	}
+
+	if err := model.MarkMessagesAsRead(ctx, c.MessageStore, user, thread.Key); err != nil {
+		bjson.HandleError(w, err)
+		return
+	}
+
+	model.MarkAsRead(thread, user.Key)
+	thread.UserReads = model.MapReadsToUserPartials(thread, thread.Users)
+
+	if err := c.ThreadStore.Commit(ctx, thread); err != nil {
+		bjson.HandleError(w, err)
+		return
+	}
+
+	bjson.WriteJSON(w, thread, http.StatusOK)
 }

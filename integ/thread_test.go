@@ -357,3 +357,53 @@ func TestGetMessagesByThread(t *testing.T) {
 		})
 	}
 }
+
+func TestMarkThreadAsRead(t *testing.T) {
+	owner, _ := testutil.NewUser(_ctx, t, _dbClient, _searchClient)
+	member, _ := testutil.NewUser(_ctx, t, _dbClient, _searchClient)
+	nonmember, _ := testutil.NewUser(_ctx, t, _dbClient, _searchClient)
+	thread := testutil.NewThread(_ctx, t, _dbClient, owner, []*model.User{member})
+	url := fmt.Sprintf("/threads/%s/reads", thread.ID)
+
+	tests := []struct {
+		Name         string
+		AuthHeader   map[string]string
+		ExpectStatus int
+	}{
+		{
+			AuthHeader:   testutil.GetAuthHeader(owner.Token),
+			ExpectStatus: http.StatusOK,
+		},
+		{
+			AuthHeader:   testutil.GetAuthHeader(member.Token),
+			ExpectStatus: http.StatusOK,
+		},
+		{
+			AuthHeader:   testutil.GetAuthHeader(nonmember.Token),
+			ExpectStatus: http.StatusNotFound,
+		},
+		{
+			AuthHeader:   map[string]string{"boop": "beep"},
+			ExpectStatus: http.StatusUnauthorized,
+		},
+	}
+
+	for _, tcase := range tests {
+		t.Run(tcase.Name, func(t *testing.T) {
+			tt := apitest.New(tcase.Name).
+				Handler(_handler).
+				Post(url).
+				Header("Content-Type", "application/json").
+				Headers(tcase.AuthHeader).
+				Expect(t).
+				Status(tcase.ExpectStatus)
+
+			if tcase.ExpectStatus < http.StatusBadRequest {
+				tt.Assert(jsonpath.Equal("$.id", thread.ID))
+				tt.Assert(jsonpath.Equal("$.reads[0].id", owner.ID))
+			}
+
+			tt.End()
+		})
+	}
+}

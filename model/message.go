@@ -160,7 +160,6 @@ func (m *Message) HasPhotoKey(key string) bool {
 func MarkMessagesAsRead(
 	ctx context.Context,
 	s MessageStore,
-	r Readable,
 	u *User,
 	parentKey *datastore.Key,
 ) error {
