@@ -566,3 +566,81 @@ func TestAddUserToThread(t *testing.T) {
 		})
 	}
 }
+
+func TestRemoveFromThread(t *testing.T) {
+	owner, _ := testutil.NewUser(_ctx, t, _dbClient, _searchClient)
+	member, _ := testutil.NewUser(_ctx, t, _dbClient, _searchClient)
+	memberToRemove, _ := testutil.NewUser(_ctx, t, _dbClient, _searchClient)
+	memberToLeave, _ := testutil.NewUser(_ctx, t, _dbClient, _searchClient)
+	nonmember, _ := testutil.NewUser(_ctx, t, _dbClient, _searchClient)
+	thread := testutil.NewThread(_ctx, t, _dbClient, owner, []*model.User{member, memberToRemove, memberToLeave})
+
+	tests := []struct {
+		Name              string
+		AuthHeader        map[string]string
+		GivenUserID       string
+		ExpectStatus      int
+		ExpectMemberIDs   []string
+		ExpectMemberNames []string
+	}{
+		{
+			Name:         "nonmember attempt",
+			AuthHeader:   testutil.GetAuthHeader(nonmember.Token),
+			GivenUserID:  member.ID,
+			ExpectStatus: http.StatusNotFound,
+		},
+		{
+			Name:         "member attempt to remove other member",
+			AuthHeader:   testutil.GetAuthHeader(member.Token),
+			GivenUserID:  memberToRemove.ID,
+			ExpectStatus: http.StatusNotFound,
+		},
+		{
+			Name:         "bad auth header",
+			AuthHeader:   map[string]string{"boop": "beep"},
+			GivenUserID:  member.ID,
+			ExpectStatus: http.StatusUnauthorized,
+		},
+		{
+			Name:              "owner remove member success",
+			AuthHeader:        testutil.GetAuthHeader(owner.Token),
+			GivenUserID:       memberToRemove.ID,
+			ExpectStatus:      http.StatusOK,
+			ExpectMemberIDs:   []string{owner.ID, member.ID, memberToLeave.ID},
+			ExpectMemberNames: []string{member.FullName, owner.FullName, memberToLeave.FullName},
+		},
+		{
+			Name:              "member remove self success",
+			AuthHeader:        testutil.GetAuthHeader(memberToLeave.Token),
+			GivenUserID:       memberToLeave.ID,
+			ExpectStatus:      http.StatusOK,
+			ExpectMemberIDs:   []string{owner.ID, member.ID},
+			ExpectMemberNames: []string{member.FullName, owner.FullName},
+		},
+	}
+
+	for _, tcase := range tests {
+		t.Run(tcase.Name, func(t *testing.T) {
+			tt := apitest.New(tcase.Name).
+				Handler(_handler).
+				Delete(fmt.Sprintf("/threads/%s/users/%s", thread.ID, tcase.GivenUserID)).
+				JSON(`{}`).
+				Headers(tcase.AuthHeader).
+				Expect(t).
+				Status(tcase.ExpectStatus)
+
+			if tcase.ExpectStatus <= http.StatusBadRequest {
+				tt.Assert(jsonpath.Equal("$.id", thread.ID))
+				tt.Assert(jsonpath.Equal("$.owner.id", owner.ID))
+				tt.Assert(jsonpath.Equal("$.owner.fullName", owner.FullName))
+				for i := range tcase.ExpectMemberNames {
+					tt.Assert(jsonpath.Equal(
+						fmt.Sprintf("$.users[%d].fullName", i),
+						tcase.ExpectMemberNames[i]))
+				}
+			}
+
+			tt.End()
+		})
+	}
+}

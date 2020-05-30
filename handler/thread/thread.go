@@ -44,7 +44,7 @@ func NewHandler(c *Config) *mux.Router {
 	t.Use(c.TxnMiddleware, middleware.WithThread(c.ThreadStore))
 	t.HandleFunc("/threads/{threadID}", c.UpdateThread).Methods("PATCH")
 	t.HandleFunc("/threads/{threadID}/users/{userID}", c.AddUserToThread).Methods("POST")
-	// t.HandleFunc("/threads/{threadID}/users/{userID}", c.RemoveUserFromThread).Methods("DELETE")
+	t.HandleFunc("/threads/{threadID}/users/{userID}", c.RemoveUserFromThread).Methods("DELETE")
 	// t.HandleFunc("/threads/{threadID}/messages", c.AddMessageToThread).Methods("POST")
 	// t.HandleFunc("/threads/{threadID}/messages/{messageID}", c.DeleteThreadMessage).Methods("DELETE")
 
@@ -306,6 +306,59 @@ func (c *Config) AddUserToThread(w http.ResponseWriter, r *http.Request) {
 
 	if err := thread.AddUser(userToBeAdded); err != nil {
 		bjson.HandleError(w, err)
+		return
+	}
+
+	// Save the thread.
+	if _, err := c.ThreadStore.CommitWithTransaction(tx, thread); err != nil {
+		bjson.HandleError(w, err)
+		return
+	}
+
+	if _, err := tx.Commit(); err != nil {
+		bjson.HandleError(w, err)
+		return
+	}
+
+	bjson.WriteJSON(w, thread, http.StatusOK)
+}
+
+// RemoveUserFromThread removed a user from the thread. The owner can remove
+// anyone. Participants can remove themselves.
+func (c *Config) RemoveUserFromThread(w http.ResponseWriter, r *http.Request) {
+	op := errors.Op("handlers.RemoveUserFromThread")
+	ctx := r.Context()
+	tx, _ := middleware.TransactionFromContext(ctx)
+	u := middleware.UserFromContext(ctx)
+	thread := middleware.ThreadFromContext(ctx)
+
+	vars := mux.Vars(r)
+	userID := vars["userID"]
+
+	userToBeRemoved, err := c.UserStore.GetUserByID(ctx, userID)
+	if err != nil {
+		bjson.HandleError(w, err)
+		return
+	}
+
+	// If the requestor is the owner or the requestor is the user to be
+	// removed, then remove the user.
+	if thread.HasUser(userToBeRemoved) && (thread.OwnerIs(u) || userToBeRemoved.Key.Equal(u.Key)) {
+		// The owner cannot remove herself
+		if userToBeRemoved.Key.Equal(thread.OwnerKey) {
+			bjson.HandleError(w, errors.E(op,
+				map[string]string{"message": "The Convo owner cannot be removed from the convo"},
+				http.StatusBadRequest,
+			))
+
+			return
+		}
+
+		thread.RemoveUser(userToBeRemoved)
+	} else {
+		bjson.HandleError(w, errors.E(op,
+			errors.Str("no permission"),
+			http.StatusNotFound))
 		return
 	}
 
