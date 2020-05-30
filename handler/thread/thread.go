@@ -40,10 +40,10 @@ func NewHandler(c *Config) *mux.Router {
 	s.HandleFunc("/threads/{threadID}/messages", c.GetMessagesByThread).Methods("GET")
 	s.HandleFunc("/threads/{threadID}/reads", c.MarkThreadAsRead).Methods("POST")
 
-	t := s.NewRoute().Subrouter()
-	t.Use(c.TxnMiddleware)
+	t := r.NewRoute().Subrouter()
+	t.Use(c.TxnMiddleware, middleware.WithThread(c.ThreadStore))
 	t.HandleFunc("/threads/{threadID}", c.UpdateThread).Methods("PATCH")
-	// t.HandleFunc("/threads/{threadID}/users/{userID}", c.AddUserToThread).Methods("POST")
+	t.HandleFunc("/threads/{threadID}/users/{userID}", c.AddUserToThread).Methods("POST")
 	// t.HandleFunc("/threads/{threadID}/users/{userID}", c.RemoveUserFromThread).Methods("DELETE")
 	// t.HandleFunc("/threads/{threadID}/messages", c.AddMessageToThread).Methods("POST")
 	// t.HandleFunc("/threads/{threadID}/messages/{messageID}", c.DeleteThreadMessage).Methods("DELETE")
@@ -245,6 +245,71 @@ func (c *Config) UpdateThread(w http.ResponseWriter, r *http.Request) {
 
 	thread.Subject = html.UnescapeString(payload.Subject)
 
+	if _, err := c.ThreadStore.CommitWithTransaction(tx, thread); err != nil {
+		bjson.HandleError(w, err)
+		return
+	}
+
+	if _, err := tx.Commit(); err != nil {
+		bjson.HandleError(w, err)
+		return
+	}
+
+	bjson.WriteJSON(w, thread, http.StatusOK)
+}
+
+// AddUserToThread adds a user to the thread. Only owners can add participants.
+func (c *Config) AddUserToThread(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	tx, _ := middleware.TransactionFromContext(ctx)
+	u := middleware.UserFromContext(ctx)
+	thread := middleware.ThreadFromContext(ctx)
+	vars := mux.Vars(r)
+	maybeUserID := vars["userID"]
+
+	// If the requestor is not the owner, throw an error.
+	if !thread.OwnerIs(u) {
+		bjson.HandleError(w, errors.E(
+			errors.Op("handlers.AddUserToThread"),
+			errors.Str("no permission"),
+			http.StatusNotFound))
+
+		return
+	}
+
+	// Either get the user if we got an ID or, if we got an email, get or
+	// create the user by email.
+	var (
+		userToBeAdded *model.User
+		err           error
+		created       bool
+	)
+
+	if _, ee := valid.Email(maybeUserID); ee != nil {
+		userToBeAdded, err = c.UserStore.GetUserByID(ctx, maybeUserID)
+	} else {
+		userToBeAdded, created, err = c.UserStore.GetOrCreateUserByEmail(ctx, maybeUserID)
+	}
+
+	if err != nil {
+		bjson.HandleError(w, err)
+		return
+	}
+
+	if created {
+		err = c.UserStore.Commit(ctx, userToBeAdded)
+		if err != nil {
+			bjson.HandleError(w, err)
+			return
+		}
+	}
+
+	if err := thread.AddUser(userToBeAdded); err != nil {
+		bjson.HandleError(w, err)
+		return
+	}
+
+	// Save the thread.
 	if _, err := c.ThreadStore.CommitWithTransaction(tx, thread); err != nil {
 		bjson.HandleError(w, err)
 		return

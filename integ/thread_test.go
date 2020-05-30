@@ -468,3 +468,101 @@ func TestUpdateThread(t *testing.T) {
 		})
 	}
 }
+
+func TestAddUserToThread(t *testing.T) {
+	owner, _ := testutil.NewUser(_ctx, t, _dbClient, _searchClient)
+	member, _ := testutil.NewUser(_ctx, t, _dbClient, _searchClient)
+	memberToAdd, _ := testutil.NewUser(_ctx, t, _dbClient, _searchClient)
+	secondMemberToAdd, _ := testutil.NewUser(_ctx, t, _dbClient, _searchClient)
+	nonmember, _ := testutil.NewUser(_ctx, t, _dbClient, _searchClient)
+	thread := testutil.NewThread(_ctx, t, _dbClient, owner, []*model.User{member})
+
+	tests := []struct {
+		Name         string
+		AuthHeader   map[string]string
+		ExpectStatus int
+		GivenUserID  string
+		ShouldPass   bool
+		ExpectNames  []string
+	}{
+		{
+			Name:         "nonmember attempt to add",
+			AuthHeader:   testutil.GetAuthHeader(nonmember.Token),
+			ExpectStatus: http.StatusNotFound,
+			GivenUserID:  memberToAdd.ID,
+		},
+		{
+			Name:         "member without permission attempt to add",
+			AuthHeader:   testutil.GetAuthHeader(member.Token),
+			ExpectStatus: http.StatusNotFound,
+			GivenUserID:  memberToAdd.ID,
+		},
+		{
+			Name:         "bad auth header",
+			AuthHeader:   map[string]string{"boop": "beep"},
+			ExpectStatus: http.StatusUnauthorized,
+			GivenUserID:  memberToAdd.ID,
+		},
+		{
+			Name:         "success with existing user",
+			AuthHeader:   testutil.GetAuthHeader(owner.Token),
+			ExpectStatus: http.StatusOK,
+			GivenUserID:  memberToAdd.ID,
+			ExpectNames: []string{
+				member.FullName,
+				owner.FullName,
+				memberToAdd.FullName,
+			},
+		},
+		{
+			Name:         "success with email",
+			AuthHeader:   testutil.GetAuthHeader(owner.Token),
+			ExpectStatus: http.StatusOK,
+			GivenUserID:  "addedOnThe@fly.com",
+			ExpectNames: []string{
+				member.FullName,
+				owner.FullName,
+				memberToAdd.FullName,
+				"addedonthe",
+			},
+		},
+		{
+			Name:         "second success with email",
+			AuthHeader:   testutil.GetAuthHeader(owner.Token),
+			ExpectStatus: http.StatusOK,
+			GivenUserID:  secondMemberToAdd.Email,
+			ExpectNames: []string{
+				member.FullName,
+				owner.FullName,
+				memberToAdd.FullName,
+				"addedonthe",
+				secondMemberToAdd.FullName,
+			},
+		},
+	}
+
+	for _, tcase := range tests {
+		t.Run(tcase.Name, func(t *testing.T) {
+			tt := apitest.New(tcase.Name).
+				Handler(_handler).
+				Post(fmt.Sprintf("/threads/%s/users/%s", thread.ID, tcase.GivenUserID)).
+				JSON(`{}`).
+				Headers(tcase.AuthHeader).
+				Expect(t).
+				Status(tcase.ExpectStatus)
+
+			if tcase.ExpectStatus <= http.StatusBadRequest {
+				tt.Assert(jsonpath.Equal("$.id", thread.ID))
+				tt.Assert(jsonpath.Equal("$.owner.id", owner.ID))
+				tt.Assert(jsonpath.Equal("$.owner.fullName", owner.FullName))
+				for i := range tcase.ExpectNames {
+					tt.Assert(jsonpath.Equal(
+						fmt.Sprintf("$.users[%d].fullName", i),
+						tcase.ExpectNames[i]))
+				}
+			}
+
+			tt.End()
+		})
+	}
+}
