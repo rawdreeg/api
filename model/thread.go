@@ -9,6 +9,7 @@ import (
 	"cloud.google.com/go/datastore"
 	"github.com/gosimple/slug"
 
+	"github.com/hiconvo/api/clients/db"
 	"github.com/hiconvo/api/errors"
 )
 
@@ -34,6 +35,7 @@ type ThreadStore interface {
 	GetUnhydratedThreadsByUser(ctx context.Context, u *User, p *Pagination) ([]*Thread, error)
 	GetThreadsByUser(ctx context.Context, u *User, p *Pagination) ([]*Thread, error)
 	Commit(ctx context.Context, t *Thread) error
+	CommitWithTransaction(tx db.Transaction, t *Thread) (*datastore.PendingKey, error)
 	Delete(ctx context.Context, t *Thread) error
 }
 

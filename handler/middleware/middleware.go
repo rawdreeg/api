@@ -11,6 +11,7 @@ import (
 	"github.com/gorilla/mux"
 
 	"github.com/hiconvo/api/bjson"
+	"github.com/hiconvo/api/clients/db"
 	"github.com/hiconvo/api/errors"
 	"github.com/hiconvo/api/model"
 )
@@ -123,6 +124,22 @@ func WithThread(s model.ThreadStore) func(http.Handler) http.Handler {
 			next.ServeHTTP(w, r.WithContext(context.WithValue(ctx, threadKey, thread)))
 		})
 	}
+}
+
+// TransactionFromContext extracts a transaction from the given
+// context is one is present.
+func TransactionFromContext(ctx context.Context) (db.Transaction, bool) {
+	return db.TransactionFromContext(ctx)
+}
+
+// AddTransactionToContext returns a new context with a transaction added.
+func AddTransactionToContext(ctx context.Context, c db.Client) (context.Context, db.Transaction, error) {
+	return db.AddTransactionToContext(ctx, c)
+}
+
+// WithTransaction is middleware that adds a transaction to the request context.
+func WithTransaction(c db.Client) func(http.Handler) http.Handler {
+	return db.WithTransaction(c)
 }
 
 // GetAuthToken extracts the Authorization Bearer token from request

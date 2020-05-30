@@ -17,12 +17,13 @@ import (
 )
 
 type Config struct {
-	UserStore    model.UserStore
-	ThreadStore  model.ThreadStore
-	MessageStore model.MessageStore
-	Mail         *mail.Client
-	Magic        magic.Client
-	Storage      *storage.Client
+	UserStore     model.UserStore
+	ThreadStore   model.ThreadStore
+	MessageStore  model.MessageStore
+	TxnMiddleware mux.MiddlewareFunc
+	Mail          *mail.Client
+	Magic         magic.Client
+	Storage       *storage.Client
 }
 
 func NewHandler(c *Config) *mux.Router {
@@ -39,9 +40,9 @@ func NewHandler(c *Config) *mux.Router {
 	s.HandleFunc("/threads/{threadID}/messages", c.GetMessagesByThread).Methods("GET")
 	s.HandleFunc("/threads/{threadID}/reads", c.MarkThreadAsRead).Methods("POST")
 
-	// t := r.NewRoute().Subrouter()
-	// t.Use(db.WithTransaction())
-	// t.HandleFunc("/threads/{threadID}", c.UpdateThread).Methods("PATCH")
+	t := s.NewRoute().Subrouter()
+	t.Use(c.TxnMiddleware)
+	t.HandleFunc("/threads/{threadID}", c.UpdateThread).Methods("PATCH")
 	// t.HandleFunc("/threads/{threadID}/users/{userID}", c.AddUserToThread).Methods("POST")
 	// t.HandleFunc("/threads/{threadID}/users/{userID}", c.RemoveUserFromThread).Methods("DELETE")
 	// t.HandleFunc("/threads/{threadID}/messages", c.AddMessageToThread).Methods("POST")
@@ -203,6 +204,53 @@ func (c *Config) MarkThreadAsRead(w http.ResponseWriter, r *http.Request) {
 	thread.UserReads = model.MapReadsToUserPartials(thread, thread.Users)
 
 	if err := c.ThreadStore.Commit(ctx, thread); err != nil {
+		bjson.HandleError(w, err)
+		return
+	}
+
+	bjson.WriteJSON(w, thread, http.StatusOK)
+}
+
+type updateThreadPayload struct {
+	Subject string `validate:"nonzero,max=255"`
+}
+
+// UpdateThread allows the owner to change the thread subject.
+func (c *Config) UpdateThread(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	tx, _ := middleware.TransactionFromContext(ctx)
+	u := middleware.UserFromContext(ctx)
+	thread := middleware.ThreadFromContext(ctx)
+
+	// If the requestor is not the owner, throw an error
+	if !thread.OwnerIs(u) {
+		bjson.HandleError(w, errors.E(
+			errors.Op("handlers.UpdateThread"),
+			errors.Str("no permission"),
+			http.StatusNotFound))
+
+		return
+	}
+
+	var payload updateThreadPayload
+	if err := bjson.ReadJSON(&payload, r); err != nil {
+		bjson.HandleError(w, err)
+		return
+	}
+
+	if err := valid.Raw(&payload); err != nil {
+		bjson.HandleError(w, err)
+		return
+	}
+
+	thread.Subject = html.UnescapeString(payload.Subject)
+
+	if _, err := c.ThreadStore.CommitWithTransaction(tx, thread); err != nil {
+		bjson.HandleError(w, err)
+		return
+	}
+
+	if _, err := tx.Commit(); err != nil {
 		bjson.HandleError(w, err)
 		return
 	}

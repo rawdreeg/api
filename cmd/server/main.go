@@ -56,13 +56,14 @@ func main() {
 		sc.Get("PHOTO_BUCKET_NAME", ""))
 
 	h := handler.New(&handler.Config{
-		UserStore:    &db.UserStore{DB: dbClient, Notif: notifClient, S: searchClient},
-		ThreadStore:  &db.ThreadStore{DB: dbClient},
-		MessageStore: &db.MessageStore{DB: dbClient},
-		Mail:         mailClient,
-		Magic:        magic.NewClient(sc.Get("APP_SECRET", "")),
-		OAuth:        oauth.NewClient(sc.Get("GOOGLE_AUD", "")),
-		Storage:      storageClient,
+		UserStore:     &db.UserStore{DB: dbClient, Notif: notifClient, S: searchClient},
+		ThreadStore:   &db.ThreadStore{DB: dbClient},
+		MessageStore:  &db.MessageStore{DB: dbClient},
+		TxnMiddleware: dbc.WithTransaction(dbClient),
+		Mail:          mailClient,
+		Magic:         magic.NewClient(sc.Get("APP_SECRET", "")),
+		OAuth:         oauth.NewClient(sc.Get("GOOGLE_AUD", "")),
+		Storage:       storageClient,
 	})
 
 	srv := http.Server{

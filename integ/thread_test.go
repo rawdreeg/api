@@ -407,3 +407,64 @@ func TestMarkThreadAsRead(t *testing.T) {
 		})
 	}
 }
+
+func TestUpdateThread(t *testing.T) {
+	owner, _ := testutil.NewUser(_ctx, t, _dbClient, _searchClient)
+	member, _ := testutil.NewUser(_ctx, t, _dbClient, _searchClient)
+	nonmember, _ := testutil.NewUser(_ctx, t, _dbClient, _searchClient)
+	thread := testutil.NewThread(_ctx, t, _dbClient, owner, []*model.User{member})
+	url := fmt.Sprintf("/threads/%s", thread.ID)
+
+	tests := []struct {
+		Name         string
+		AuthHeader   map[string]string
+		ShouldPass   bool
+		ExpectStatus int
+		GivenBody    map[string]interface{}
+	}{
+		{
+			AuthHeader:   testutil.GetAuthHeader(owner.Token),
+			ExpectStatus: http.StatusOK,
+			ShouldPass:   true,
+			GivenBody:    map[string]interface{}{"subject": "Ruth Marcus"},
+		},
+		{
+			AuthHeader:   testutil.GetAuthHeader(member.Token),
+			ExpectStatus: http.StatusNotFound,
+			ShouldPass:   false,
+			GivenBody:    map[string]interface{}{"subject": "Ruth Marcus"},
+		},
+		{
+			AuthHeader:   testutil.GetAuthHeader(nonmember.Token),
+			ExpectStatus: http.StatusNotFound,
+			ShouldPass:   false,
+		},
+		{
+			AuthHeader:   map[string]string{"boop": "beep"},
+			ExpectStatus: http.StatusUnauthorized,
+			ShouldPass:   false,
+		},
+	}
+
+	for _, tcase := range tests {
+		t.Run(tcase.Name, func(t *testing.T) {
+			tt := apitest.New(tcase.Name).
+				Handler(_handler).
+				Patch(url).
+				JSON(tcase.GivenBody).
+				Headers(tcase.AuthHeader).
+				Expect(t).
+				Status(tcase.ExpectStatus)
+
+			if tcase.ExpectStatus <= http.StatusBadRequest {
+				if tcase.ShouldPass {
+					tt.Assert(jsonpath.Equal("$.subject", tcase.GivenBody["subject"]))
+				} else {
+					tt.Assert(jsonpath.Equal("$.subject", thread.Subject))
+				}
+			}
+
+			tt.End()
+		})
+	}
+}

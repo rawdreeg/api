@@ -17,13 +17,14 @@ import (
 )
 
 type Config struct {
-	UserStore    model.UserStore
-	ThreadStore  model.ThreadStore
-	MessageStore model.MessageStore
-	Mail         *mail.Client
-	Magic        magic.Client
-	OAuth        oauth.Client
-	Storage      *storage.Client
+	UserStore     model.UserStore
+	ThreadStore   model.ThreadStore
+	MessageStore  model.MessageStore
+	TxnMiddleware mux.MiddlewareFunc
+	Mail          *mail.Client
+	Magic         magic.Client
+	OAuth         oauth.Client
+	Storage       *storage.Client
 }
 
 func New(c *Config) http.Handler {
@@ -41,12 +42,13 @@ func New(c *Config) http.Handler {
 		Storage:   c.Storage,
 	}))
 	router.PathPrefix("/threads").Handler(thread.NewHandler(&thread.Config{
-		UserStore:    c.UserStore,
-		ThreadStore:  c.ThreadStore,
-		MessageStore: c.MessageStore,
-		Mail:         c.Mail,
-		Magic:        c.Magic,
-		Storage:      c.Storage,
+		UserStore:     c.UserStore,
+		ThreadStore:   c.ThreadStore,
+		MessageStore:  c.MessageStore,
+		TxnMiddleware: c.TxnMiddleware,
+		Mail:          c.Mail,
+		Magic:         c.Magic,
+		Storage:       c.Storage,
 	}))
 
 	h := middleware.WithCORS(router)
