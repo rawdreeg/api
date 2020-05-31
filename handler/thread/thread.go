@@ -51,7 +51,7 @@ func NewHandler(c *Config) *mux.Router {
 	t.HandleFunc("/threads/{threadID}/users/{userID}", c.AddUserToThread).Methods("POST")
 	t.HandleFunc("/threads/{threadID}/users/{userID}", c.RemoveUserFromThread).Methods("DELETE")
 	t.HandleFunc("/threads/{threadID}/messages", c.AddMessageToThread).Methods("POST")
-	// t.HandleFunc("/threads/{threadID}/messages/{messageID}", c.DeleteThreadMessage).Methods("DELETE")
+	t.HandleFunc("/threads/{threadID}/messages/{messageID}", c.DeleteThreadMessage).Methods("DELETE")
 
 	return r
 }
@@ -475,4 +475,67 @@ func (c *Config) AddMessageToThread(w http.ResponseWriter, r *http.Request) {
 	}
 
 	bjson.WriteJSON(w, message, http.StatusCreated)
+}
+
+// DeleteThreadMessage deletes a thread message.
+func (c *Config) DeleteThreadMessage(w http.ResponseWriter, r *http.Request) {
+	op := errors.Op("handlers.DeleteThreadMessage")
+	ctx := r.Context()
+	tx, _ := middleware.TransactionFromContext(ctx)
+	u := middleware.UserFromContext(ctx)
+	thread := middleware.ThreadFromContext(ctx)
+	vars := mux.Vars(r)
+	id := vars["messageID"]
+
+	messages, err := c.MessageStore.GetMessagesByThread(ctx, thread)
+	if err != nil {
+		bjson.HandleError(w, errors.E(op, err))
+		return
+	}
+
+	var message *model.Message
+	for i := range messages {
+		if messages[i].ID == id {
+			message = messages[i]
+		}
+	}
+
+	if message == nil {
+		bjson.HandleError(w, errors.E(
+			op, errors.Str("message not a child of thread"), http.StatusNotFound))
+		return
+	}
+
+	if !(message.OwnerIs(u)) {
+		bjson.HandleError(w, errors.E(op, errors.Str("no permission"), http.StatusNotFound))
+		return
+	}
+
+	// The top message from a thread cannot be deleted.
+	if messages[0].Key.Equal(message.Key) {
+		bjson.HandleError(w, errors.E(op, errors.Str("delete head message"),
+			map[string]string{"message": "You cannot delete this message. Delete your Convo instead."},
+			http.StatusBadRequest))
+
+		return
+	}
+
+	if err := c.MessageStore.Delete(ctx, message); err != nil {
+		bjson.HandleError(w, errors.E(op, err))
+		return
+	}
+
+	thread.ResponseCount--
+
+	if _, err := c.ThreadStore.CommitWithTransaction(tx, thread); err != nil {
+		bjson.HandleError(w, errors.E(op, err))
+		return
+	}
+
+	if _, err := tx.Commit(); err != nil {
+		bjson.HandleError(w, errors.E(op, err))
+		return
+	}
+
+	bjson.WriteJSON(w, message, http.StatusOK)
 }

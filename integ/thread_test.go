@@ -1,9 +1,11 @@
 package handler_test
 
 import (
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"testing"
+	"time"
 
 	"cloud.google.com/go/datastore"
 	"github.com/icrowley/fake"
@@ -727,5 +729,75 @@ func TestAddMessageToThread(t *testing.T) {
 		}
 
 		tt.End()
+	}
+}
+
+func TestDeleteThreadMessage(t *testing.T) {
+	owner, _ := testutil.NewUser(_ctx, t, _dbClient, _searchClient)
+	member1, _ := testutil.NewUser(_ctx, t, _dbClient, _searchClient)
+	member2, _ := testutil.NewUser(_ctx, t, _dbClient, _searchClient)
+	nonmember, _ := testutil.NewUser(_ctx, t, _dbClient, _searchClient)
+	thread := testutil.NewThread(_ctx, t, _dbClient, owner, []*model.User{member1, member2})
+	message1 := testutil.NewThreadMessage(_ctx, t, _dbClient, owner, thread)
+	message2 := testutil.NewThreadMessage(_ctx, t, _dbClient, member1, thread)
+
+	// We reduce the time resolution because the test database does not
+	// store it with native resolution. When the time is retrieved
+	// from the database, the result of json marshaling is a couple fewer
+	// digits than marshaling the native time without truncating, which
+	// causes the tests to fail.
+	message2.Timestamp = message2.Timestamp.Truncate(time.Microsecond)
+	message2encoded, err := json.Marshal(message2)
+	if err != nil {
+		t.Error(err)
+	}
+
+	tests := []struct {
+		Name            string
+		GivenAuthHeader map[string]string
+		GivenMessageID  string
+		ExpectCode      int
+		ExpectBody      string
+	}{
+		{
+			Name:            "owner attempt to delete top message",
+			GivenAuthHeader: testutil.GetAuthHeader(owner.Token),
+			GivenMessageID:  message1.ID,
+			ExpectCode:      http.StatusBadRequest,
+			ExpectBody:      `{"message":"You cannot delete this message. Delete your Convo instead."}`,
+		},
+		{
+			Name:            "member attempt to delete message he does not own",
+			GivenAuthHeader: testutil.GetAuthHeader(member1.Token),
+			GivenMessageID:  message1.ID,
+			ExpectCode:      http.StatusNotFound,
+			ExpectBody:      `{"message":"The requested resource was not found"}`,
+		},
+		{
+			Name:            "nonmember attempt to delete message",
+			GivenAuthHeader: testutil.GetAuthHeader(nonmember.Token),
+			GivenMessageID:  message1.ID,
+			ExpectCode:      http.StatusNotFound,
+			ExpectBody:      `{"message":"The requested resource was not found"}`,
+		},
+		{
+			Name:            "empty payload",
+			GivenAuthHeader: testutil.GetAuthHeader(member1.Token),
+			GivenMessageID:  message2.ID,
+			ExpectCode:      http.StatusOK,
+			ExpectBody:      string(message2encoded),
+		},
+	}
+
+	for _, tcase := range tests {
+		apitest.New(tcase.Name).
+			Handler(_handler).
+			Delete(fmt.Sprintf("/threads/%s/messages/%s", thread.ID, tcase.GivenMessageID)).
+			JSON(`{}`).
+			Headers(tcase.GivenAuthHeader).
+			Expect(t).
+			Status(tcase.ExpectCode).
+			Body(tcase.ExpectBody).
+			End()
 	}
 }
