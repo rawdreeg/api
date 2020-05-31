@@ -115,6 +115,7 @@ func (m *Message) Load(ps []datastore.Property) error {
 				for i := range photoKeys {
 					photoKey, ok := photoKeys[i].(string)
 					if ok {
+						// TODO: URL handling
 						photos[i] = photoKey
 					}
 				}

@@ -15,6 +15,7 @@ import (
 	sender "github.com/hiconvo/api/clients/mail"
 	"github.com/hiconvo/api/clients/notification"
 	"github.com/hiconvo/api/clients/oauth"
+	"github.com/hiconvo/api/clients/opengraph"
 	"github.com/hiconvo/api/clients/search"
 	"github.com/hiconvo/api/clients/storage"
 	"github.com/hiconvo/api/db"
@@ -34,6 +35,8 @@ func Handler(dbClient dbc.Client, searchClient search.Client) http.Handler {
 		Magic:         magic.NewClient(""),
 		Storage:       storage.NewClient("", ""),
 		OAuth:         oauth.NewClient(""),
+		Notif:         notification.NewLogger(),
+		OG:            opengraph.NewClient(),
 	})
 }
 

@@ -64,6 +64,7 @@ func main() {
 		Magic:         magic.NewClient(sc.Get("APP_SECRET", "")),
 		OAuth:         oauth.NewClient(sc.Get("GOOGLE_AUD", "")),
 		Storage:       storageClient,
+		Notif:         notifClient,
 	})
 
 	srv := http.Server{

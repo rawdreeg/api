@@ -7,7 +7,9 @@ import (
 
 	"github.com/hiconvo/api/bjson"
 	"github.com/hiconvo/api/clients/magic"
+	notif "github.com/hiconvo/api/clients/notification"
 	"github.com/hiconvo/api/clients/oauth"
+	"github.com/hiconvo/api/clients/opengraph"
 	"github.com/hiconvo/api/clients/storage"
 	"github.com/hiconvo/api/handler/middleware"
 	"github.com/hiconvo/api/handler/thread"
@@ -25,6 +27,8 @@ type Config struct {
 	Magic         magic.Client
 	OAuth         oauth.Client
 	Storage       *storage.Client
+	Notif         notif.Client
+	OG            opengraph.Client
 }
 
 func New(c *Config) http.Handler {
@@ -49,6 +53,8 @@ func New(c *Config) http.Handler {
 		Mail:          c.Mail,
 		Magic:         c.Magic,
 		Storage:       c.Storage,
+		Notif:         c.Notif,
+		OG:            c.OG,
 	}))
 
 	h := middleware.WithCORS(router)

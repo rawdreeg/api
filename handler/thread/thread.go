@@ -8,9 +8,12 @@ import (
 
 	"github.com/hiconvo/api/bjson"
 	"github.com/hiconvo/api/clients/magic"
+	notif "github.com/hiconvo/api/clients/notification"
+	"github.com/hiconvo/api/clients/opengraph"
 	"github.com/hiconvo/api/clients/storage"
 	"github.com/hiconvo/api/errors"
 	"github.com/hiconvo/api/handler/middleware"
+	"github.com/hiconvo/api/log"
 	"github.com/hiconvo/api/mail"
 	"github.com/hiconvo/api/model"
 	"github.com/hiconvo/api/valid"
@@ -24,6 +27,8 @@ type Config struct {
 	Mail          *mail.Client
 	Magic         magic.Client
 	Storage       *storage.Client
+	OG            opengraph.Client
+	Notif         notif.Client
 }
 
 func NewHandler(c *Config) *mux.Router {
@@ -45,7 +50,7 @@ func NewHandler(c *Config) *mux.Router {
 	t.HandleFunc("/threads/{threadID}", c.UpdateThread).Methods("PATCH")
 	t.HandleFunc("/threads/{threadID}/users/{userID}", c.AddUserToThread).Methods("POST")
 	t.HandleFunc("/threads/{threadID}/users/{userID}", c.RemoveUserFromThread).Methods("DELETE")
-	// t.HandleFunc("/threads/{threadID}/messages", c.AddMessageToThread).Methods("POST")
+	t.HandleFunc("/threads/{threadID}/messages", c.AddMessageToThread).Methods("POST")
 	// t.HandleFunc("/threads/{threadID}/messages/{messageID}", c.DeleteThreadMessage).Methods("DELETE")
 
 	return r
@@ -374,4 +379,100 @@ func (c *Config) RemoveUserFromThread(w http.ResponseWriter, r *http.Request) {
 	}
 
 	bjson.WriteJSON(w, thread, http.StatusOK)
+}
+
+type createMessagePayload struct {
+	Body string `validate:"nonzero"`
+	Blob string
+}
+
+// AddMessageToThread adds a message to the given thread.
+func (c *Config) AddMessageToThread(w http.ResponseWriter, r *http.Request) {
+	op := errors.Op("handlers.AddMessageToThread")
+	ctx := r.Context()
+	u := middleware.UserFromContext(ctx)
+	tx, _ := middleware.TransactionFromContext(ctx)
+	thread := middleware.ThreadFromContext(ctx)
+
+	// Check permissions
+	if !(thread.OwnerIs(u) || thread.HasUser(u)) {
+		bjson.HandleError(w, errors.E(op, http.StatusNotFound, errors.Str("no permission")))
+		return
+	}
+
+	var payload createMessagePayload
+	if err := bjson.ReadJSON(&payload, r); err != nil {
+		bjson.HandleError(w, err)
+		return
+	}
+
+	if err := valid.Raw(&payload); err != nil {
+		bjson.HandleError(w, err)
+		return
+	}
+
+	var (
+		photoURL string
+		err      error
+	)
+
+	if payload.Blob != "" {
+		photoURL, err = c.Storage.PutPhotoFromBlob(ctx, thread.ID, payload.Blob)
+		if err != nil {
+			bjson.HandleError(w, errors.E(op, err))
+			return
+		}
+	}
+
+	messageBody := html.UnescapeString(payload.Body)
+	link := c.OG.Extract(ctx, messageBody)
+
+	message, err := model.NewThreadMessage(
+		u,
+		thread,
+		messageBody,
+		photoURL,
+		link,
+	)
+	if err != nil {
+		bjson.HandleError(w, errors.E(op, err))
+		return
+	}
+
+	if thread.ResponseCount == 1 {
+		// Name the thread after the link, if included
+		if message.HasLink() && message.Link.Title != "" {
+			thread.Subject = message.Link.Title
+		}
+	}
+
+	if err := c.MessageStore.Commit(ctx, message); err != nil {
+		bjson.HandleError(w, errors.E(op, err))
+		return
+	}
+
+	if _, err := c.ThreadStore.CommitWithTransaction(tx, thread); err != nil {
+		bjson.HandleError(w, errors.E(op, err))
+		return
+	}
+
+	if _, err := tx.Commit(); err != nil {
+		bjson.HandleError(w, errors.E(op, err))
+		return
+	}
+
+	// Send a notification for all later responses
+	if err := c.Notif.Put(&notif.Notification{
+		UserKeys:   notif.FilterKey(thread.UserKeys, u.Key),
+		Actor:      u.FullName,
+		Verb:       notif.NewMessage,
+		Target:     notif.Thread,
+		TargetID:   thread.ID,
+		TargetName: thread.Subject,
+	}); err != nil {
+		// Log the error but don't fail the request
+		log.Alarm(err)
+	}
+
+	bjson.WriteJSON(w, message, http.StatusCreated)
 }

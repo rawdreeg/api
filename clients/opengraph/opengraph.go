@@ -19,7 +19,7 @@ type LinkData struct {
 }
 
 type Client interface {
-	Extract(ctx context.Context, text string) LinkData
+	Extract(ctx context.Context, text string) *LinkData
 }
 
 func NewClient() Client {
@@ -28,16 +28,16 @@ func NewClient() Client {
 
 type clientImpl struct{}
 
-func (c *clientImpl) Extract(ctx context.Context, text string) LinkData {
+func (c *clientImpl) Extract(ctx context.Context, text string) *LinkData {
 	url := xurls.Strict().FindString(text)
 	if url == "" {
-		return LinkData{}
+		return nil
 	}
 
 	data, err := og.FetchWithContext(ctx, url)
 	if err != nil {
 		log.Printf("opengraph.Extract(%s): %v", url, err)
-		return LinkData{}
+		return nil
 	}
 
 	var image string
@@ -50,7 +50,7 @@ func (c *clientImpl) Extract(ctx context.Context, text string) LinkData {
 		favicon = data.URL.Scheme + "://" + data.URL.Hostname() + favicon
 	}
 
-	return LinkData{
+	return &LinkData{
 		Title:       data.Title,
 		URL:         data.URL.String(),
 		Site:        data.SiteName,

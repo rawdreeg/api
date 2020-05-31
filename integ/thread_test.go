@@ -644,3 +644,88 @@ func TestRemoveFromThread(t *testing.T) {
 		})
 	}
 }
+
+func TestAddMessageToThread(t *testing.T) {
+	owner, _ := testutil.NewUser(_ctx, t, _dbClient, _searchClient)
+	member1, _ := testutil.NewUser(_ctx, t, _dbClient, _searchClient)
+	member2, _ := testutil.NewUser(_ctx, t, _dbClient, _searchClient)
+	nonmember, _ := testutil.NewUser(_ctx, t, _dbClient, _searchClient)
+	thread := testutil.NewThread(_ctx, t, _dbClient, owner, []*model.User{member1, member2})
+	url := fmt.Sprintf("/threads/%s/messages", thread.ID)
+
+	tests := []struct {
+		GivenAuthHeader map[string]string
+		GivenBody       string
+		GivenAuthor     *model.User
+		ExpectCode      int
+		ExpectBody      string
+		ExpectPhoto     bool
+	}{
+		// Owner
+		{
+			GivenAuthHeader: testutil.GetAuthHeader(owner.Token),
+			GivenAuthor:     owner,
+			GivenBody:       `{"blob":"/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAMCAgICAgMCAgIDAwMDBAYEBAQEBAgGBgUGCQgKCgkICQkKDA8MCgsOCwkJDRENDg8QEBEQCgwSExIQEw8QEBD/2wBDAQMDAwQDBAgEBAgQCwkLEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBD/wAARCAAKAAoDASIAAhEBAxEB/8QAFgABAQEAAAAAAAAAAAAAAAAABgcJ/8QAKBAAAQICCAcBAAAAAAAAAAAAAwQFAAECBhESExQjMQkYISIkVIOT/8QAFQEBAQAAAAAAAAAAAAAAAAAAAAX/xAAbEQACAQUAAAAAAAAAAAAAAAAAAgMEBRIUcf/aAAwDAQACEQMRAD8AYO3EBMjrTVpEtYnIKUxvMyhsYJgH0cb4xVebmrs+sngNk9taM/X4xk6pgy5aYsRl77lKdG9rG3s3gbnlvuH/AEnDacoVtuhwTh//2Q==", "body": "hello"}`,
+			ExpectCode:      http.StatusCreated,
+			ExpectBody:      "hello",
+			ExpectPhoto:     true,
+		},
+		// Member
+		{
+			GivenAuthHeader: testutil.GetAuthHeader(member1.Token),
+			GivenAuthor:     member1,
+			GivenBody:       `{"body": "hello"}`,
+			ExpectCode:      http.StatusCreated,
+			ExpectBody:      "hello",
+			ExpectPhoto:     false,
+		},
+		// NonMember
+		{
+			GivenAuthHeader: testutil.GetAuthHeader(nonmember.Token),
+			GivenAuthor:     nonmember,
+			GivenBody:       `{"body": "hello"}`,
+			ExpectCode:      http.StatusNotFound,
+			ExpectPhoto:     false,
+		},
+		// EmptyPayload
+		{
+			GivenAuthHeader: testutil.GetAuthHeader(member1.Token),
+			GivenAuthor:     member1,
+			GivenBody:       `{}`,
+			ExpectCode:      http.StatusBadRequest,
+			ExpectPhoto:     false,
+		},
+		{
+			GivenAuthHeader: testutil.GetAuthHeader(owner.Token),
+			GivenAuthor:     owner,
+			GivenBody:       `{"blob":"/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAMCAgICAgMCAgIDAwMDBAYEBAQEBAgGBgUGCQgKCgkICQkKDA8MCgsOCwkJDRENDg8QEBEQCgwSExIQEw8QEBD/2wBDAQMDAwQDBAgEBAgQCwkLEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBD/wAARCAAKAAoDASIAAhEBAxEB/8QAFgABAQEAAAAAAAAAAAAAAAAABgcJ/8QAKBAAAQICCAcBAAAAAAAAAAAAAwQFAAECBhESExQjMQkYISIkVIOT/8QAFQEBAQAAAAAAAAAAAAAAAAAAAAX/xAAbEQACAQUAAAAAAAAAAAAAAAAAAgMEBRIUcf/aAAwDAQACEQMRAD8AYO3EBMjrTVpEtYnIKUxvMyhsYJgH0cb4xVebmrs+sngNk9taM/X4xk6pgy5aYsRl77lKdG9rG3s3gbnlvuH/AEnDacoVtuhwTh//2Q=="}`,
+			ExpectCode:      http.StatusBadRequest,
+			ExpectPhoto:     false,
+		},
+	}
+
+	for _, testCase := range tests {
+		tt := apitest.New("CreateThreadMessage").
+			Handler(_handler).
+			Post(url).
+			JSON(testCase.GivenBody).
+			Headers(testCase.GivenAuthHeader).
+			Expect(t).
+			Status(testCase.ExpectCode)
+
+		if testCase.ExpectCode < 300 {
+			tt.
+				Assert(jsonpath.Equal("$.parentId", thread.ID)).
+				Assert(jsonpath.Equal("$.body", testCase.ExpectBody)).
+				Assert(jsonpath.Equal("$.user.fullName", testCase.GivenAuthor.FullName)).
+				Assert(jsonpath.Equal("$.user.id", testCase.GivenAuthor.ID))
+			if testCase.ExpectPhoto {
+				tt.Assert(jsonpath.Present("$.photos[0]"))
+			} else {
+				tt.Assert(jsonpath.NotPresent("$.photos[0]"))
+			}
+		}
+
+		tt.End()
+	}
+}
